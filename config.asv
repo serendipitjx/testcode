@@ -1,0 +1,28 @@
+function params = config()
+    % ====================== 机器人几何参数 ======================
+    params.Lx = 655;          % 车身长度(mm)
+    params.Ly = 335;          % 车身宽度(mm)
+    params.a = params.Lx/2;   % 车轮x向偏移(mm)
+    params.b = params.Ly/2;   % 车轮y向偏移(mm)
+    params.wheel_pos = [params.a, params.b; -params.a, params.b; -params.a, -params.b; params.a, -params.b]; % 4车轮位置
+    params.vimax = 50000000;     % 最大驱动速度(mm/s)
+    params.phidotmax = 100*pi;   % 最大转向速度(rad/s)
+
+    % ====================== 控制器参数 ======================
+    params.k1 = 0.4;
+    params.k2 = 0.4;
+    params.k3 = 0.9;
+    params.eps = 0.001;
+    % ====================== 仿真参数 ======================
+    params.dt = 0.05;         % 时间步长(s)
+    params.t_end = 10;       % 仿真时长(s)
+    params.num_steps = round(params.t_end/params.dt);
+
+    % ====================== 期望路径参数 ======================
+    params.ctrl_pts = [0,0; 0,2.5; 7.5,-2.5; 10,0]; % 贝塞尔曲线控制点
+    params.num_path_pts = params.num_steps; % 路径离散点数
+    %===================================================================
+    params.Vd_max = 50;        % 驱动电机最大速度（mm/s，论文Table I明确给出）
+    params.dot_phi_max = 0.4;  % 转向电机最大速度（rad/s，论文Table I明确给出）
+    params.vm = 0.5;           % 最小基座速度（论文命题1要求v≥vm>0，避免速度为0导致稳定性问题）
+end

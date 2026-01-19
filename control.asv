@@ -1,0 +1,142 @@
+    function [new_state_dot] = control(path, k , state_dot , state)   
+    %% 计算s
+    persistent  s ;
+    persistent s_dot;
+    if isempty(s)
+        s = 0;  % 初始值
+    end
+
+    if isempty(s_dot)
+        s_dot = 0;  % 初始值
+    end
+
+    params = config();
+    
+    q = [state(1),state(2)];
+    theta_b =state(3);
+    %%
+    path_x = path(1, :);
+    path_y = path(2, :);
+    thetad = path(3, :);
+
+    dx = diff(path_x); dy = diff(path_y);
+    s_list =  [0,cumsum(sqrt(dx.^2 + dy.^2))];
+    Lp = s_list( end );
+
+    x = interp1(s_list , path_x, s , 'linear');
+    y = interp1(s_list , path_y, s , 'linear');
+    Pd = [x, y];
+    dthetad_ds = (4*pi / Lp^2) * s;
+    d2thetad_ds2 = 4*pi / Lp^2;
+    dx_ds_vec = gradient(path_x, s_list);
+    d2x_ds2_vec = gradient(dx_ds_vec, s_list);
+    dy_ds_vec = gradient(path_y, s_list);
+    d2y_ds2_vec = gradient(dy_ds_vec, s_list);
+    dx_ds = interp1(s_list, dx_ds_vec, s, 'linear');
+    dy_ds = interp1(s_list, dy_ds_vec, s, 'linear');
+    d2x_ds2 = interp1(s_list, d2x_ds2_vec, s, 'linear');
+    d2y_ds2 = interp1(s_list, d2y_ds2_vec, s, 'linear');
+    theta_d = interp1(s_list,thetad, s, 'linear');
+    
+    % 切向角和曲率
+    psit = atan2(dy_ds , dx_ds);
+   
+    denom = (dx_ds^2 + dy_ds^2)^(3/2) + 1e-6;
+    Cc = (dx_ds * d2y_ds2 - dy_ds * d2x_ds2) / denom;
+    URT = [cos(psit), sin(psit);sin(psit), -cos(psit)];
+    error_xy = URT * (q - Pd)';
+     xe = error_xy(1);
+     ye = error_xy(2);
+     
+    
+     vx = state_dot(1 , :);
+     vy = state_dot(2 , :);
+     v_c = sqrt( vx^2 + vy^2 );
+     psiv = atan2(vy , vx);
+     omega_b = state_dot(3 , :);
+     
+     psie = psit - psiv;
+     thete = theta_d - theta_b;
+    % 更新速度方向psiv
+    sigma_ye = -asin(params.k2 * ye / (abs(ye) + params.eps));
+    new_psiv = psit - sigma_ye;
+    eps_sigma = params.eps;           
+    denom_sigma = abs(ye) + eps_sigma;
+    u = params.k2 * ye ./ denom_sigma;
+    du_dye = params.k2 * ( denom_sigma - ye .* sign(ye) ) ./ ( denom_sigma.^2 + 1e-12 );
+    dsigma_dye = - du_dye ./ ( sqrt(1 - u.^2) + 1e-12 );
+    
+
+    k_s = params.k1 * xe + cos(sigma_ye);
+    k_b = params.k3 * thete + dthetad_ds * k_s;
+
+   
+    v_candidates = [];
+    betai = atan(params.wheel_pos(1,2)/params.wheel_pos(1,1));
+    for i = 1:4
+        li = norm(params.wheel_pos(i,:));
+        alpha = new_psiv- theta_b;
+        etai = alpha*(-1)^(i+1) - betai*(-1)^i;
+        sin_etai = sin(etai);
+        cos_etai = cos(etai);
+        denom_a = sqrt(1 + (k_b^2)*li^2 + 2*li*k_b*sin_etai);
+        v_candidate_a = params.vimax / denom_a;  
+        v_candidates = [v_candidates; v_candidate_a]; 
+
+        kx = k_s * (Cc * ye - 1) + cos(psie);
+        ky =-(k_s * Cc * xe + sin(psie));
+
+        ktheta = dthetad_ds * k_s - k_b;
+       
+        kv = (1 + dsigma_dye*xe)*Cc*k_s + dsigma_dye*sin(psie);
+
+        kb_prime = params.k2*ktheta + d2thetad_ds2*k_s^2 + dthetad_ds*params.k1*kx - dthetad_ds*dsigma_dye*ky*sin(sigma_ye);
+        
+        numer_b = 1 + k_b^2*li^2 + 2*li*k_b*sin_etai;
+        
+        denom_b = kb_prime*li*cos_etai + (kv - k_b)*(1 + li*k_b*sin_etai) + 1e-6;
+
+        v_candidates = [v_candidates; params.phidotmax * numer_b / denom_b];
+
+    end
+     % 只保留“正的、有限的”候选速度
+     v_candidates = v_candidates(~isnan(v_candidates));
+     v_candidates = v_candidates(~isinf(v_candidates));
+     v_candidates = abs(v_candidates);
+
+     % 再从中取最小
+     new_v_c = min(v_candidates);
+     new_vx =new_v_c*cos(new_psiv);
+     new_vy =new_v_c*sin(new_psiv);
+    
+     % 更新主体朝向 
+     new_omega_b = k_b * new_v_c;
+     s_dot = k_s * new_v_c;
+     s = min(s + s_dot*params.dt, Lp);    
+     new_state_dot=[new_vx;new_vy;new_omega_b];
+   % new_theta_b = theta_b + new_omega_b * params.dt;
+
+    %{
+         逆运算，由基座速度反推计算车轮速度 
+    vi = zeros(1,4); 
+    phidot = zeros(1,4);
+    s = min(s + s_dot*params.dt, Lp);
+    for i = 1:4
+        li = norm(params.wheel_pos(i,:));
+       
+        alpha = new_psiv - new_theta_b;
+        etai = alpha*(-1)^(i+1) - betai*(-1)^i;
+        sin_etai = sin(etai);
+        cos_etai = cos(etai);
+       
+         驱动速度
+        vi(i) = new_v_c .* sqrt(1 + k_b^2*li^2 + 2*li*k_b*sin_etai);
+         转向速度
+        numer_phidot = kb_prime*li*cos_etai + (kv - k_b)*(1 + li*k_b*sin_etai);
+        denom_phidot = 1 + k_b^2*li^2 + 2*li*k_b*sin_etai + 1e-6;
+        phidot(i) = new_v_c * numer_phidot / denom_phidot;
+    end
+    %}
+
+    end
+

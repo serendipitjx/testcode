@@ -1,0 +1,86 @@
+function main()
+    clear control
+    clear static_counter
+    cvx_clear
+    clear eall
+    params = config();
+
+
+    [path] = bezier_path(params.ctrl_pts, params.num_path_pts);
+
+    
+    q = [0, 0];            % 初始位置(mm)
+    theta_b = 0;           % 初始朝向(rad)
+    v_c = 1;               % 初始速度大小(mm/s)
+    vx = 1;
+    vy = 1;
+    omega_b = 1;
+    
+    q_history = zeros(params.num_steps, 2);
+    vi_history = zeros(params.num_steps, 4);
+    phidot_history = zeros(params.num_steps, 4);
+    vc_history = zeros(params.num_steps, 1);
+    t_history = zeros(params.num_steps, 1);
+    phi_history=zeros(params.num_steps,4);
+    
+    state_dot=[vx ; vy ; omega_b];
+
+    %仿真循环
+    for k = 1:params.num_steps
+        t = (k-1)*params.dt;
+        t_history(k) = t;
+        q_history(k,:) = q;
+        vc_history(k) = v_c;
+        state = [q , theta_b];
+       
+        if((path(1,end)-q(1))^2+(path(2,end)-q(2))^2>10)    
+        [new_state_dot] = control_RSS(path,k,state_dot,state);
+        % 更新状态
+         end
+        vx = new_state_dot(1);
+        vy = new_state_dot(2);
+        v_c = sqrt(vx^2+vy^2);
+        psiv = atan2(vy,vx);
+        omega_b= new_state_dot(3);
+        theta_b = theta_b + omega_b * params.dt;
+        q = q + [vx , vy]* params.dt;
+        state_dot = new_state_dot;
+        % 推算各个轮子速度
+        phi = [0;0;0;0];
+        vi = [0;0;0;0];
+        cos_theta = cos(theta_b);
+        sin_theta = sin(theta_b);
+        vx_B = vx * cos_theta + vy * sin_theta;  % 机体系x向速度
+        vy_B = -vx * sin_theta + vy * cos_theta; % 机体系y向速度
+      
+        for i = 1:4
+        Hj = [1,0,-params.wheel_pos(i,2);0,1,params.wheel_pos(i,1)];
+        vi_matrix = Hj*[vx_B ; vy_B ; omega_b];
+        vxi = vi_matrix(1);
+        vyi = vi_matrix(2);
+        vi(i) = sqrt(vxi^2+vyi^2);
+        phi(i) = atan2(vyi,vxi);
+        end
+
+        vi_history(k,:) = vi;
+        phi_history(k,:) = phi;
+        
+        
+        
+    end
+    phidot_history = diff(phi_history);
+    for m=1:params.num_steps
+        while (phidot_history(m)>=pi||phidot_history<=-pi)
+            if(phidot_history>=pi)
+                phidot_history=phidot_history-2*pi;
+            end
+            if(phidot_history<=-pi)
+                phidot_history=phidot_history+2*pi;
+            end
+        end
+    end
+    
+    plot_results(q_history, vi_history, [[0,0,0,0];phidot_history], vc_history, t_history, path);
+    
+end
+
