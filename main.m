@@ -2,9 +2,9 @@ function main()
     clear control
     clear static_counter
     cvx_clear
-    clear eall
+    clear all
     params = config();
-
+    
 
     [path] = bezier_path(params.ctrl_pts, params.num_path_pts);
 
@@ -69,16 +69,25 @@ function main()
         
     end
     phidot_history = diff(phi_history);
-    for m=1:params.num_steps
-        while (phidot_history(m)>=pi||phidot_history<=-pi)
-            if(phidot_history>=pi)
-                phidot_history=phidot_history-2*pi;
-            end
-            if(phidot_history<=-pi)
-                phidot_history=phidot_history+2*pi;
-            end
-        end
-    end
+    % 角度归一化：将phidot_history每个元素限制在(-π, π]区间（更通用的写法）
+for m = 1:params.num_steps
+    % 先取第m个元素（避免重复索引）
+    phi_val = phidot_history(m);
+    
+    % 方法1：用mod函数直接归一化（MATLAB内置函数，最简洁）
+    phi_val = mod(phi_val + pi, 2*pi) - pi;
+    
+    % 方法2：手动归一化（替代while，避免死循环）
+    % while phi_val > pi
+    %     phi_val = phi_val - 2*pi;
+    % end
+    % while phi_val < -pi
+    %     phi_val = phi_val + 2*pi;
+    % end
+    
+    % 将归一化后的值写回数组
+    phidot_history(m) = phi_val;
+end
     
     plot_results(q_history, vi_history, [[0,0,0,0];phidot_history], vc_history, t_history, path);
     

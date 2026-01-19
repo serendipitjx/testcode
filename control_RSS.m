@@ -71,12 +71,15 @@ function [new_state_dot] = control_RSS(path, k, state_dot, state)
         H{i} = [1, 0, -params.wheel_pos(i,2); 0, 1, params.wheel_pos(i,1)];
     end
     
-    max_iter = 100; 
+    max_iter = 1; 
     u_current=zeros(3,K);
     J_prev=0;
     for i = 1 : max_iter
         u_prev=alpha;
-        cvx_begin quiet 
+      
+cvx_solver SCS;
+
+        cvx_begin 
       
             variable u(3, K) % 控制增量 [ax; ay; alpha] * dt
             
@@ -87,7 +90,7 @@ function [new_state_dot] = control_RSS(path, k, state_dot, state)
             expression summ1
             expression sumomega
             nu(:, 1) = current_nu;
-            for t = 1:K
+            for t = 1:K-1
                 nu(:, t+1) = nu(:, t) + u(:, t);
             end
             R_psi0 =[cos(psi0),-sin(psi0);sin(psi0),cos(psi0)];
@@ -102,7 +105,7 @@ function [new_state_dot] = control_RSS(path, k, state_dot, state)
                 NU=nu(:,l)+NU; 
                 sumomega=sumomega+nu(3,l);
                 end
-               J = J + square_pos(norm(current_xy-path(1:2,min(params.num_steps,t+k-1))+C_1*NU))+k1*(psi0+sumomega*dt-path(3,min(params.num_steps,t+k-1)))^2;
+               J = J + sum_square((current_xy-path(1:2,min(params.num_steps,t+k-1))+C_1*NU))+k1*(psi0+sumomega*dt-path(3,min(params.num_steps,t+k-1)))^2;
             end
   
             %path(1:2,min(params.num_steps,t+k))
@@ -115,48 +118,7 @@ function [new_state_dot] = control_RSS(path, k, state_dot, state)
             end
          %}
         
-        %{
-cvx_begin quiet
-            variable u(3, K) % 控制增量 [ax; ay; alpha] * dt
-            
-            % 定义状态序列 nu (机体速度)
-            expression nu(3, K+1)
-            expression NU(3,1)
-            expression ss(3,3)
-            expression J
-            J=0;
-            nu(:, 1) = current_nu;
-            for t = 1:K
-                nu(:, t+1) = nu(:, t) + u(:, t);
-            end
-            R_psi0 =[cos(psi0),-sin(psi0);sin(psi0),cos(psi0)];
-            R_0=[R_psi0,current_xy];
-           
-            C_1=R_0 .*dt;
-            
-           
-            for t = 1:K
-                %NU=0;
-              
-                ss=ss+[0,-nu(3,t),nu(1,t);nu(3,t),0,nu(2,t);0,0,0];
-                %{
-                 for l = 1:t
-                 NU=nu(:,l)+NU; 
-                 end
-                %}
-               
-               J = J + square_pos(norm(current_xy-path(1:2,min(params.num_steps,t+k-1))+C_1*ss*[0;0;1]));
-            end
-            %path(1:2,min(params.num_steps,t+k))
-            
-           
-           minimize(J+0.001*sum_square(u(:))+rho*sum_square(u(:)-u_prev(:)));
-          
-          
-          
-        cvx_end
-        %}
-        
+      
        
         R=[cos(params.phidotmax*dt),-sin(params.phidotmax*dt);sin(params.phidotmax*dt),cos(params.phidotmax*dt)];
         u_cumsum = [zeros(3, 1), cumsum(alpha(:, 1:K-1), 2)]; 
@@ -172,22 +134,22 @@ cvx_begin quiet
                  summ2 =summ2+( (eye(2) + R') * H{ii} * nu_hat(:,l) + R'* H{ii} * alpha(:,l) )' * (eye(2) + R') * H{ii} * ( u(:,jj) - alpha(:,jj) );
               end 
           
-          0.5 * square_pos( norm(H{ii} * nu(:,l)) ) + 0.5 * square_pos( norm(H{ii} * (nu(:,l) + u(:,l)) ))...
-          -(0.5 * square_pos( norm ( ( eye(2) + R ) * H{ii} * nu_hat(:,l) + R * H{ii} * alpha(:,l)) )+(( eye(2) + R ) * H{ii} * nu_hat(:,l) + R * H{ii} * alpha(:,l))'...
+          0.5 * sum_square((H{ii} * nu(:,l)) ) + 0.5 * sum_square((H{ii} * (nu(:,l) + u(:,l)) ))...
+          -(0.5 * sum_square( ( ( eye(2) + R ) * H{ii} * nu_hat(:,l) + R * H{ii} * alpha(:,l)) )+(( eye(2) + R ) * H{ii} * nu_hat(:,l) + R * H{ii} * alpha(:,l))'...
           * R * H{ii} * ( u(:,l) - alpha(:,l)) + summ1) <= 0;
 
-          0.5 * square_pos( norm(H{ii} * nu(:,l)) ) + 0.5 * square_pos( norm(H{ii} * (nu(:,l) + u(:,l))))...
-          -(0.5 * square_pos( norm ( ( eye(2) + R') * H{ii} * nu_hat(:,l) + R' * H{ii} * alpha(:,l)) )+(( eye(2) + R') * H{ii} * nu_hat(:,l) + R'* H{ii} * alpha(:,l))'...
+          0.5 * sum_square( H{ii} * nu(:,l) )  + 0.5 * sum_square((H{ii} * (nu(:,l) + u(:,l))))...
+          -(0.5 * sum_square( ( eye(2) + R') * H{ii} * nu_hat(:,l) + R' * H{ii} * alpha(:,l) )+(( eye(2) + R') * H{ii} * nu_hat(:,l) + R'* H{ii} * alpha(:,l))'...
           * R'* H{ii} * ( u(:,l) - alpha(:,l)) + summ2) <= 0;
 
-               norm(H{ii} * nu(:,l)) <= params.vimax;
+              sum_square(H{ii} * nu(:,l)) <= params.vimax^2;
             end
           end
         
        
           cvx_end
          fprintf('最优代价是: %f\n', cvx_optval);
-        if strcmp(cvx_status, 'Solved') || strcmp(cvx_status, 'Inaccurate/Solved')
+        if strcmp(cvx_status, 'Solved') || strcmp(cvx_status, 'Failed')
             
            fprintf('正在执行，已经进行第%d步/%d\n', k , i );
         else
@@ -195,10 +157,10 @@ cvx_begin quiet
             % disp(['Optimization failed at step ', num2str(k), ': ', cvx_status]);
         end
        
-        if(abs(J_prev-cvx_optval)<1)
-            break
-        end
-             J_prev=cvx_optval;
+       %if(abs(J_prev-cvx_optval)<1)
+        %    break
+        %end
+        %     J_prev=cvx_optval;
         
 
        alpha = u;
