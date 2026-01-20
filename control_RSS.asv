@@ -35,13 +35,15 @@ function [new_state_dot] = control_RSS(path, k, state_dot, state)
       
             variable u(3, K) % 控制增量 [ax; ay; alpha] * dt
             variable nu(3, K+1)
+            variable NU(3, K+1)
+            variable sumomega(1,K+1)
             % 定义状态序列 nu (机体速度)
             
-            expression NU(3,1)
+           
             expression J
             expression summ1(K,4)
             expression summ2(K,4)
-            expression sumomega
+           
             
             R_psi0 =[cos(psi0),-sin(psi0);sin(psi0),cos(psi0)];
             S=[1,0,0;0,1,0];
@@ -55,7 +57,7 @@ function [new_state_dot] = control_RSS(path, k, state_dot, state)
                 NU=nu(:,l)+NU; 
                 sumomega=sumomega+nu(3,l);
                 end
-               J = J + sum_square(current_xy - path(1:2,min(params.num_steps,t+k-1)) + C_1 * NU) + k1 * sum_square(psi0+sumomega*dt-path(3,min(params.num_steps,t+k-1)));
+               J = J + sum_square(current_xy - path(1:2,min(params.num_steps, t+k-1)) + C_1 * NU(:,l)) + k1 * sum_square(psi0 + sumomega * dt - path(3, min(params.num_steps, t+k-1)));
             end
   
             %path(1:2,min(params.num_steps,t+k))
@@ -77,6 +79,12 @@ function [new_state_dot] = control_RSS(path, k, state_dot, state)
             nu(:, 1) == current_nu;
             for t = 1:K-1
                 nu(:, t+1) == nu(:, t) + u(:, t);
+            end
+            for s=1:K
+                v=zeros(K,1);
+                v(1:s)=1;
+            NU(:,s)==nu*v;
+            sumom
             end
           for l=1:K
               
