@@ -1,19 +1,14 @@
 function [new_state_dot] = control_RSS(path, k, state_dot, state)
-    % NMPC Controller utilizing Sequential Convex Programming (SCP)
-    % Matches the variable names in the provided config()
-    
-    % 持久变量用于热启动 (Warm Start)，加速收敛
-    persistent u_guess
     
     params = config();
    
     % ================= Param Setup =================
     psi0=state(3);
-    K = 10;                     % 预测时域 (Prediction Horizon)
+    K = 5;                     % 预测时域 (Prediction Horizon)
     dt = params.dt;
     rho = 0.01;                  % 正则化权重 (Regularization weight)
     alpha = zeros(3,K);
-    k1=0.001;
+    k1=0.1;
     % 提取当前状态
     current_xy = [state(1),state(2)]'; % [x; y]全局速度
   
@@ -21,96 +16,53 @@ function [new_state_dot] = control_RSS(path, k, state_dot, state)
     current_theta = state(3);   % theta
     current_nu = [cos(psi0),sin(psi0),0;-sin(psi0),cos(psi0),0;0,0,1]*state_dot;     % [vx; vy; omega] (Body Frame)
     
-    % 初始化猜测值 u_guess (3xK)
-    if isempty(u_guess)
-        u_guess = zeros(3, K);
-    else
-        % Shift previous solution for warm start
-        u_guess = [u_guess(:, 2:end), u_guess(:, end)];
-    end
-    
-    % ================= Reference Generation =================
-    % 将全局路径转换为机体坐标系下的参考速度序列 ref_nu
-    ref_nu = zeros(3, K);
-    
-    for j = 1:K
-        % 获取路径点索引 (处理边界)
-        idx_curr = min(k + j - 1, size(path, 2));
-        idx_next = min(k + j, size(path, 2));
-       
-        % 全局参考位置和朝向
-        p_curr = path(:, idx_curr);
-        p_next = path(:, idx_next);
-        
-        % 计算全局参考速度 (简单差分)
-        v_global_x = (p_next(1) - p_curr(1)) / dt;
-        v_global_y = (p_next(2) - p_curr(2)) / dt;
-        omega_ref = (p_next(3) - p_curr(3)) / dt;
-        
-        % 转换到当前的参考帧 (近似，理想应随预测步更新参考帧，这里简化为随路径点变换)
-        % 为了计算误差，我们将参考速度转换到该时刻路径点的机体坐标系下
-        theta_ref = p_curr(3);
-        c_ref = cos(theta_ref);
-        s_ref = sin(theta_ref);
-        R_ref_inv = [c_ref, s_ref; -s_ref, c_ref];
-        
-        v_body_ref = R_ref_inv * [v_global_x; v_global_y];
-        ref_nu(:, j) = [v_body_ref; omega_ref];
-    end
-    
-   
-   
-    
-    
     % Wheel_i_vel = H{i} * nu
+    
     H = cell(1, 4);
     for i = 1:4
-        % params.wheel_pos is [x, y]
-        % vx_wheel = vx - omega * y
-        % vy_wheel = vy + omega * x
+       
         H{i} = [1, 0, -params.wheel_pos(i,2); 0, 1, params.wheel_pos(i,1)];
     end
     
-    max_iter = 1; 
+    max_iter = 3; 
     u_current=zeros(3,K);
     J_prev=0;
     for i = 1 : max_iter
         u_prev=alpha;
-      
 cvx_solver SCS;
 
         cvx_begin 
+    cvx_solver ECOS; % 或者用 OSQP/ECOS，对于MPC通常比SCS更快
+      cvx_begin 
       
             variable u(3, K) % 控制增量 [ax; ay; alpha] * dt
-            
+            variable nu(3, K+1)
             % 定义状态序列 nu (机体速度)
-            expression nu(3, K+1)
+            
             expression NU(3,1)
             expression J
-            expression summ1
+            expression summ1(K,4)
+            expression summ2(K,4)
             expression sumomega
-            nu(:, 1) = current_nu;
-            for t = 1:K-1
-                nu(:, t+1) = nu(:, t) + u(:, t);
-            end
+            
             R_psi0 =[cos(psi0),-sin(psi0);sin(psi0),cos(psi0)];
             S=[1,0,0;0,1,0];
             C_1=R_psi0 * S .*dt;
             
            
-            for t = 1:K
+            for t = 2:K
                 NU=0;
                 sumomega=0;
                 for l = 1:t
                 NU=nu(:,l)+NU; 
                 sumomega=sumomega+nu(3,l);
                 end
-               J = J + sum_square((current_xy-path(1:2,min(params.num_steps,t+k-1))+C_1*NU))+k1*(psi0+sumomega*dt-path(3,min(params.num_steps,t+k-1)))^2;
+               J = J + sum_square(current_xy - path(1:2,min(params.num_steps, t+k-1)) + C_1 * NU) + k1 * sum_square(psi0 + sumomega * dt - path(3, min(params.num_steps, t+k-1)));
             end
   
             %path(1:2,min(params.num_steps,t+k))
 
-           minimize(J + 0.0000001*sum_square(u(:))+rho*sum_square(u(:)-u_prev(:)));
+           minimize(J + 0.01 * sum_square(u(:)) + rho * sum_square(u(:) - u_prev(:)));
           
          %{            
            for j=1:4
@@ -118,37 +70,41 @@ cvx_solver SCS;
             end
          %}
         
-      
+     
        
         R=[cos(params.phidotmax*dt),-sin(params.phidotmax*dt);sin(params.phidotmax*dt),cos(params.phidotmax*dt)];
         u_cumsum = [zeros(3, 1), cumsum(alpha(:, 1:K-1), 2)]; 
         nu_hat= repmat(current_nu, 1, K) + u_cumsum;
         subject to
+            nu(:, 1) == current_nu;
+            for t = 1:K-1
+                nu(:, t+1) == nu(:, t) + u(:, t);
+            end
           for l=1:K
               
             for ii=1:4
-                summ1=0;
-                summ2=0;
+                summ1(l,ii)=0;
+                summ2(l,ii)=0;
               for jj=1:l-1
-                 summ1 =summ1+( (eye(2) + R ) * H{ii} * nu_hat(:,l) + R * H{ii} * alpha(:,l) )' * (eye(2) + R ) * H{ii} * ( u(:,jj) - alpha(:,jj) );
-                 summ2 =summ2+( (eye(2) + R') * H{ii} * nu_hat(:,l) + R'* H{ii} * alpha(:,l) )' * (eye(2) + R') * H{ii} * ( u(:,jj) - alpha(:,jj) );
+                 summ1(l,ii) =summ1(l,ii)+( (eye(2) + R ) * H{ii} * nu_hat(:,l) + R * H{ii} * alpha(:,l) )' * (eye(2) + R ) * H{ii} * ( u(:,jj) - alpha(:,jj) );
+                 summ2 (l,ii)=summ2(l,ii)+( (eye(2) + R') * H{ii} * nu_hat(:,l) + R'* H{ii} * alpha(:,l) )' * (eye(2) + R') * H{ii} * ( u(:,jj) - alpha(:,jj) );
               end 
           
-          0.5 * sum_square((H{ii} * nu(:,l)) ) + 0.5 * sum_square((H{ii} * (nu(:,l) + u(:,l)) ))...
-          -(0.5 * sum_square( ( ( eye(2) + R ) * H{ii} * nu_hat(:,l) + R * H{ii} * alpha(:,l)) )+(( eye(2) + R ) * H{ii} * nu_hat(:,l) + R * H{ii} * alpha(:,l))'...
-          * R * H{ii} * ( u(:,l) - alpha(:,l)) + summ1) <= 0;
+          % 0.5 * sum_square((H{ii} * nu(:,l)) ) + 0.5 * sum_square((H{ii} * (nu(:,l) + u(:,l)) ))...
+          % -(0.5 * sum_square( ( ( eye(2) + R ) * H{ii} * nu_hat(:,l) + R * H{ii} * alpha(:,l)) )+(( eye(2) + R ) * H{ii} * nu_hat(:,l) + R * H{ii} * alpha(:,l))'...
+          % * R * H{ii} * ( u(:,l) - alpha(:,l)) + summ1(l, ii)) <= 0;
 
-          0.5 * sum_square( H{ii} * nu(:,l) )  + 0.5 * sum_square((H{ii} * (nu(:,l) + u(:,l))))...
-          -(0.5 * sum_square( ( eye(2) + R') * H{ii} * nu_hat(:,l) + R' * H{ii} * alpha(:,l) )+(( eye(2) + R') * H{ii} * nu_hat(:,l) + R'* H{ii} * alpha(:,l))'...
-          * R'* H{ii} * ( u(:,l) - alpha(:,l)) + summ2) <= 0;
+          % % 0.5 * sum_square( H{ii} * nu(:,l) )  + 0.5 * sum_square((H{ii} * (nu(:,l) + u(:,l))))...
+          % % -(0.5 * sum_square( ( eye(2) + R') * H{ii} * nu_hat(:,l) + R' * H{ii} * alpha(:,l) )+(( eye(2) + R') * H{ii} * nu_hat(:,l) + R'* H{ii} * alpha(:,l))'...
+          % % * R'* H{ii} * ( u(:,l) - alpha(:,l)) + summ2(l, ii)) <= 0;
 
-              sum_square(H{ii} * nu(:,l)) <= params.vimax^2;
+              norm(H{ii} * nu(:,l), 2) <= params.vimax;
             end
           end
         
-       
+      %}
           cvx_end
-         fprintf('最优代价是: %f\n', cvx_optval);
+          fprintf('最优代价是: %f\n', cvx_optval);
         if strcmp(cvx_status, 'Solved') || strcmp(cvx_status, 'Failed')
             
            fprintf('正在执行，已经进行第%d步/%d\n', k , i );
@@ -157,11 +113,16 @@ cvx_solver SCS;
             % disp(['Optimization failed at step ', num2str(k), ': ', cvx_status]);
         end
        
-       %if(abs(J_prev-cvx_optval)<1)
-        %    break
-        %end
-        %     J_prev=cvx_optval;
-        
+      % if(abs(J_prev-cvx_optval)<1)
+      %      break
+      %  end
+     %     J_prev=cvx_optval;
+     if(norm(u-alpha))
+     end
+       if any(isnan(u(:)))
+    u = alpha; 
+   
+       end
 
        alpha = u;
     end
