@@ -28,36 +28,32 @@ function [new_state_dot] = control_RSS(path, k, state_dot, state)
     u_current=zeros(3,K);
     J_prev=0;
     for i = 1 : max_iter
-        u_prev=alpha;
-cvx_solver SCS;
-
-        cvx_begin 
+    u_prev=alpha;
+   
     cvx_solver ECOS; % 或者用 OSQP/ECOS，对于MPC通常比SCS更快
       cvx_begin 
       
             variable u(3, K) % 控制增量 [ax; ay; alpha] * dt
             variable nu(3, K+1)
+            variable NU(3, K)
+            variable sumomega(1,K)
             % 定义状态序列 nu (机体速度)
             
-            expression NU(3,1)
+           
             expression J
             expression summ1(K,4)
             expression summ2(K,4)
-            expression sumomega
+           
             
             R_psi0 =[cos(psi0),-sin(psi0);sin(psi0),cos(psi0)];
-            S=[1,0,0;0,1,0];
-            C_1=R_psi0 * S .*dt;
+            S=[1.1,0.1,0.01;0.1,1,0.01];
+            C_1 = R_psi0 * S .*dt;
             
            
             for t = 2:K
-                NU=0;
-                sumomega=0;
-                for l = 1:t
-                NU=nu(:,l)+NU; 
-                sumomega=sumomega+nu(3,l);
-                end
-               J = J + sum_square(current_xy - path(1:2,min(params.num_steps, t+k-1)) + C_1 * NU) + k1 * sum_square(psi0 + sumomega * dt - path(3, min(params.num_steps, t+k-1)));
+              
+               
+               J = J + sum_square(current_xy - path(1:2,min(params.num_steps, t+k-1)) + C_1 * NU(:,t)) + k1 * sum_square(psi0 + sumomega(t) * dt - path(3, min(params.num_steps, t+k-1)));
             end
   
             %path(1:2,min(params.num_steps,t+k))
@@ -80,6 +76,12 @@ cvx_solver SCS;
             for t = 1:K-1
                 nu(:, t+1) == nu(:, t) + u(:, t);
             end
+            for s=1:K
+                v=zeros(K+1,1);
+                v(1:s)=1;
+            NU(:, s) == nu * v;
+            sumomega(:, s) == nu(3,:) * v;
+            end
           for l=1:K
               
             for ii=1:4
@@ -90,15 +92,17 @@ cvx_solver SCS;
                  summ2 (l,ii)=summ2(l,ii)+( (eye(2) + R') * H{ii} * nu_hat(:,l) + R'* H{ii} * alpha(:,l) )' * (eye(2) + R') * H{ii} * ( u(:,jj) - alpha(:,jj) );
               end 
           
-          % 0.5 * sum_square((H{ii} * nu(:,l)) ) + 0.5 * sum_square((H{ii} * (nu(:,l) + u(:,l)) ))...
-          % -(0.5 * sum_square( ( ( eye(2) + R ) * H{ii} * nu_hat(:,l) + R * H{ii} * alpha(:,l)) )+(( eye(2) + R ) * H{ii} * nu_hat(:,l) + R * H{ii} * alpha(:,l))'...
-          % * R * H{ii} * ( u(:,l) - alpha(:,l)) + summ1(l, ii)) <= 0;
+           0.5 * sum_square((H{ii} * nu(:,l)) ) + 0.5 * sum_square((H{ii} * (nu(:,l) + u(:,l)) ))...
+           -(0.5 * sum_square( ( ( eye(2) + R ) * H{ii} * nu_hat(:,l) + R * H{ii} * alpha(:,l)) )+(( eye(2) + R ) * H{ii} * nu_hat(:,l) + R * H{ii} * alpha(:,l))'...
+          * R * H{ii} * ( u(:,l) - alpha(:,l)) + summ1(l, ii)) <= 0;
 
-          % % 0.5 * sum_square( H{ii} * nu(:,l) )  + 0.5 * sum_square((H{ii} * (nu(:,l) + u(:,l))))...
-          % % -(0.5 * sum_square( ( eye(2) + R') * H{ii} * nu_hat(:,l) + R' * H{ii} * alpha(:,l) )+(( eye(2) + R') * H{ii} * nu_hat(:,l) + R'* H{ii} * alpha(:,l))'...
-          % % * R'* H{ii} * ( u(:,l) - alpha(:,l)) + summ2(l, ii)) <= 0;
+          0.5 * sum_square( H{ii} * nu(:,l) )  + 0.5 * sum_square((H{ii} * (nu(:,l) + u(:,l))))...
+          -(0.5 * sum_square( ( eye(2) + R') * H{ii} * nu_hat(:,l) + R' * H{ii} * alpha(:,l) )+(( eye(2) + R') * H{ii} * nu_hat(:,l) + R'* H{ii} * alpha(:,l))'...
+          * R'* H{ii} * ( u(:,l) - alpha(:,l)) + summ2(l, ii)) <= 0;
 
-              norm(H{ii} * nu(:,l), 2) <= params.vimax;
+            if(l>1)  
+            norm(H{ii} * nu(:,l), 2) <= params.vimax;
+            end
             end
           end
         
@@ -128,5 +132,5 @@ cvx_solver SCS;
     end
     % 输出下一步的状态导数 (即下一步的速度)
     % nu^{k+1} = nu^k + u^k
-    new_state_dot = [cos(state(3)),-sin(state(3)),0;sin(state(3)),cos(state(3)),0;0,0,1]*(current_nu + u(:, 1));
+    new_state_dot =0.999 * [cos(state(3)),-sin(state(3)),0;sin(state(3)),cos(state(3)),0;0,0,1]*(current_nu + u(:, 1));
 end
