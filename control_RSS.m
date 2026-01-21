@@ -1,121 +1,147 @@
-function [new_state_dot] = control_RSS(path, k, state_dot, state)
+function [new_state_dot] = control_RSS(path, step, state_dot, state)
     
     params = config();
    
     % ================= Param Setup =================
-    psi0=state(3);
-    global K;
-    K = 5;                     % 预测时域 (Prediction Horizon)
-    dt = params.dt;
-    rho = 0.01;                  % 正则化权重 (Regularization weight)
-    alpha = zeros(3,K);
-    k1=0.1;
-    global xInit ;
     
-    % 提取当前状态
-    current_xy = [state(1),state(2)]';
-    current_theta = state(3);   
-    current_nu = [cos(psi0),sin(psi0),0;-sin(psi0),cos(psi0),0;0,0,1]*state_dot;     % [vx; vy; omega] (Body Frame)
-    xInit=current_nu;
-    % Wheel_i_vel = H{i} * nu
+    global K
+    K = 5;               % 预测时域 (Prediction Horizon)
+    rho = 0.01;                 % 正则化权重 (Regularization weight)
+    k1 = 0.1;
+
+
+    
+    
+    % ================= 初态 =================
+
+    current_xy = [state(1), state(2)]';
+    psi0 = state(3);
+    global current_nu
+    current_nu = [cos(psi0), sin(psi0), 0;
+                 -sin(psi0), cos(psi0), 0;
+                          0,         0, 1] * state_dot;     % [vx; vy; omega] (Body Frame)
+
+    R_psi0 = [cos(psi0), -sin(psi0);
+              sin(psi0),  cos(psi0)];
+
+    % ================= H =================
     global H;
     H = cell(1, 4);
     for i = 1:4
-       
         H{i} = [1, 0, -params.wheel_pos(i,2); 0, 1, params.wheel_pos(i,1)];
     end
-    
-    max_iter = 3; 
-    u_current=zeros(3,K);
-    J_prev=0;
-    for i = 1 : max_iter
-    u_prev=alpha;
+
+
+
+    % ================= 迭代 Setup =================
+    max_iter = 1; 
+    u_hat = zeros(3,K);
+
+    % ================= 一层循环开始 =======================================
+
+    for m = 1 : max_iter
+
+        % ================= 猜测解 =================
+        u_prev = u_hat;
    
-    cvx_solver ECOS; % 或者用 OSQP/ECOS，对于MPC通常比SCS更快
-    cvx_begin 
-      
-            variable u(3, K) % 控制增量 [ax; ay; alpha] * dt
-            variable nu(3, K+1)
-            variable NU(3, K)
-            variable sumomega(1,K)
+        cvx_begin
+        
+            % cvx_solver ECOS;
+            % cvx_solver SCS;
+            cvx_solver SDPT3;
+          
+            variable u(3, K)
+            variable nu(3, K)
+            variable NU(2, K)
+            variable psi(K)
             % 定义状态序列 nu (机体速度)
             
-           
+ 
+            % ================= 代价 =================
+
             expression J
-            expression summ1(K,4)
-            expression summ2(K,4)
-           
-            
-            R_psi0 = [cos(psi0),-sin(psi0);sin(psi0),cos(psi0)];
-            S=[1.1,0.1,0.01;0.1,1,0.01];
-            C_1 = R_psi0 * S .*dt;
-            
-           
-            for t = 2:K  
-               J = J + sum_square(current_xy - path(1:2,min(params.num_steps, t+k-1)) + C_1 * NU(:,t));
-               J = J + k1 * sum_square(psi0 + sumomega(t) * dt - path(3, min(params.num_steps, t+k-1)));
+
+            for k = 1:K
+               J = J + sum_square(current_xy - path(1:2, min(params.num_steps, step + k - 1)) + R_psi0 * NU(:, k) );
             end
-  
-            %path(1:2,min(params.num_steps,t+k))
 
-           minimize(J + 0.01 * sum_square(u(:)) + rho * sum_square(u(:) - u_prev(:)));
-          
-         %{            
-           for j=1:4
-               0.5*norm(H{j}*u(:,k))^2
+            for k = 1:K
+                J = J + k1 * sum_square(psi(k) - path(3, min(params.num_steps, step + k - 1)) );
             end
-         %}
-        
-     
-       
-        global R;
-        R = [cos(params.phidotmax*dt), -sin(params.phidotmax*dt);
-             sin(params.phidotmax*dt),  cos(params.phidotmax*dt)];
+            
+            minimize(J + 0.01 * sum_square(u(:)) + rho * sum_square(u(:) - u_hat(:)));
 
 
-        subject to
-          for  t=1:K
-             for n = 1:4
-              nu(:, 1) == current_nu;
-                    for t = 1:K-1
-                     nu(:, t+1) == nu(:, t) + u(:, t);
-                    end
-                    for s = 1:K
-                     v=zeros(K+1,1);
-                     v(1:s)=1;
-                     NU(:, s) == nu * v;
-                     sumomega(:, s) == nu(3,:) * v;
-                    end
-           % Cons1(alpha, u, nu, t, n) <= 0
-           norm( H{n} * [cos(psi0),-sin(psi0),0;sin(psi0),cos(psi0),0;0,0,1] * nu(:,t), 2) <= params.vimax;
-              end
-          end
+            % ================= 轮子角速度限制 =================
+
+            delta_theta = params.dt * params.phidotmax;
+
+            global R;
+            R = [cos(delta_theta), -sin(delta_theta);
+                 sin(delta_theta),  cos(delta_theta)];
     
-    cvx_end
-          fprintf('最优代价是: %f\n', cvx_optval);
+
+
+            % ================= 约束 =================
+            
+            subject to
+
+
+
+            % ================= 动力学约束 =================
+
+            nu(:, 1) == current_nu + u(:, 1);
+            NU(:, 1) == nu(1:2, 1) * params.dt;
+            psi(1) == psi0 + nu(3, 1);
+
+            for k = 1:K-1
+                nu(:, k + 1) == nu(:, k) + u(:, k + 1); 
+                NU(:, k + 1) == NU(:, k) + nu(1:2, k + 1) * params.dt;
+                psi(k + 1) == psi(k) + nu(3, k + 1) * params.dt; 
+            end
+
+
+            % ================= 轮速度约束 =================
+
+            for k = 1:K
+                for n = 1:4
+                    norm(H{n} * u(:, k), 2) <= params.vimax;
+                    % Cons1(u_hat, u, nu, t, n) <= 0
+                end
+            end
+
+        cvx_end
+
+
+
+
+        % ================= 进程打印 =================
+
+        fprintf('最优代价是: %f\n', cvx_optval);
         if strcmp(cvx_status, 'Solved') || strcmp(cvx_status, 'Failed')
-            
-           fprintf('正在执行，已经进行第%d步/%d\n', k , i );
+            fprintf('正在执行，已经进行第%d步/%d\n', k , i );
         else
-            % 如果求解失败，使用上一时刻的解或全零
-            % disp(['Optimization failed at step ', num2str(k), ': ', cvx_status]);
+                % 如果求解失败，使用上一时刻的解或全零
+                % disp(['Optimization failed at step ', num2str(k), ': ', cvx_status]);
         end
-       
-      % if(abs(J_prev-cvx_optval)<1)
-      %      break
-      %  end
-      %     J_prev=cvx_optval;
+           
     
-       if any(isnan(u(:)))
-       u = alpha; 
-       end
+        % ================= 为下一个凸问题更新的部分 =================
+        u_hat = u;
 
-       alpha = u;
-    end
+
+    end % max_iter
+
+
     % 输出下一步的状态导数 (即下一步的速度)
     % nu^{k+1} = nu^k + u^k
-    new_state_dot = 0.98 * [cos(state(3)),-sin(state(3)),0;sin(state(3)),cos(state(3)),0;0,0,1]*(current_nu + u(:, 1));
+    new_state_dot = current_nu + 0.98 * [cos(state(3)), -sin(state(3)), 0;
+                                         sin(state(3)),  cos(state(3)), 0;
+                                                     0,              0, 1] * u(:, 1);
 end
+
+
+
 function out = Cons1(alpha, u, nu, l,ii)
     global R;
     global K;
