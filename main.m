@@ -12,7 +12,7 @@ function main()
     q = [0, 0];            % 初始位置(mm)
     theta_b = 0.01;           % 初始朝向(rad)
     v_c = 141;               % 初始速度大小(mm/s)
-    vx = 10;
+    vx = 100;
     vy = 100;
     omega_b = 0.001;
     

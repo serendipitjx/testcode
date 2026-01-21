@@ -5,9 +5,9 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
     % ================= Param Setup =================
     
     global K
-    K = 5;               % 预测时域 (Prediction Horizon)
+    K = 3;               % 预测时域 (Prediction Horizon)
     rho = 0.01;                 % 正则化权重 (Regularization weight)
-    k1 = 0.1;
+    k1 = 0.01;
 
 
     
@@ -58,16 +58,18 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
             % ================= 代价 =================
 
             expression J
+            J = 0;
 
             for k = 1:K
-               J = J + sum_square(current_xy - path(1:2, min(params.num_steps, step + k - 1)) + R_psi0 * NU(:, k) );
+               J = J + sum_square(current_xy - path(1:2, min(params.num_steps, step + k )) + R_psi0 * NU(:, k) + [0 -1; 1 0] * current_nu(1:2) * (psi(k)));
             end
 
             for k = 1:K
-                J = J + k1 * sum_square(psi(k) - path(3, min(params.num_steps, step + k - 1)) );
+                % J = J + k1 * sum_square(psi(k) - path(3, min(params.num_steps, step + k )) );
             end
             
-            minimize(J + 0.01 * sum_square(u(:)) + rho * sum_square(u(:) - u_hat(:)));
+            minimize(J + 0.001 * sum_square(u(:)) + rho * sum_square(u(:) - u_hat(:)));
+            % minimize(0);
 
 
             % ================= 轮子角速度限制 =================
@@ -89,13 +91,13 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
             % ================= 动力学约束 =================
 
             nu(:, 1) == current_nu + u(:, 1);
-            NU(:, 1) == nu(1:2, 1) * params.dt;
-            psi(1) == psi0 + nu(3, 1) * params.dt;
+            NU(:, 1) == current_nu(1:2) * params.dt;
+            psi(1) == psi0 + current_nu(3) * params.dt;
 
             for k = 1:K-1
                 nu(:, k + 1) == nu(:, k) + u(:, k + 1); 
-                NU(:, k + 1) == NU(:, k) + nu(1:2, k + 1) * params.dt;
-                psi(k + 1) == psi(k) + nu(3, k + 1) * params.dt; 
+                NU(:, k + 1) == NU(:, k) + nu(1:2, k) * params.dt;
+                psi(k + 1) == psi(k) + nu(3, k) * params.dt; 
             end
 
 
@@ -103,8 +105,10 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
 
             for k = 1:K
                 for n = 1:4
-                    norm(H{n} * u(:, k), 2) <= params.vimax;
+                    % norm(H{n} * u(:, k), 2) <= params.vimax;
+                    % norm(nu(:, k), 2) <= params.vimax;
                     % Cons1(u_hat, u, nu, t, n) <= 0
+                    % square(nu(3,1)) <= 9;
                 end
             end
 
@@ -117,7 +121,7 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
 
         fprintf('最优代价是: %f\n', cvx_optval);
         if strcmp(cvx_status, 'Solved') || strcmp(cvx_status, 'Failed')
-            fprintf('正在执行，已经进行第%d步/%d\n', k , i );
+            fprintf('正在执行，已经进行第%d步/%d\n', k , m );
         else
                 % 如果求解失败，使用上一时刻的解或全零
                 % disp(['Optimization failed at step ', num2str(k), ': ', cvx_status]);
