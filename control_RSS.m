@@ -27,22 +27,20 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
     % ================= H =================
     global H;
     H = cell(1, 4);
-    for i = 1:4
-        H{i} = [1, 0, -params.wheel_pos(i,2); 0, 1, params.wheel_pos(i,1)];
+    for n = 1:4
+        H{n} = [1, 0, -params.wheel_pos(n, 2);
+                0, 1,  params.wheel_pos(n, 1)];
     end
 
 
 
     % ================= 迭代 Setup =================
     max_iter = 1; 
-    u_hat = zeros(3,K);
+    u_hat = zeros(3,K); % 猜测解
 
     % ================= 一层循环开始 =======================================
 
     for m = 1 : max_iter
-
-        % ================= 猜测解 =================
-        u_prev = u_hat;
    
         cvx_begin
         
@@ -92,7 +90,7 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
 
             nu(:, 1) == current_nu + u(:, 1);
             NU(:, 1) == nu(1:2, 1) * params.dt;
-            psi(1) == psi0 + nu(3, 1);
+            psi(1) == psi0 + nu(3, 1) * params.dt;
 
             for k = 1:K-1
                 nu(:, k + 1) == nu(:, k) + u(:, k + 1); 
