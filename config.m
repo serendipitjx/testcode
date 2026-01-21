@@ -15,7 +15,7 @@ function params = config()
     params.eps = 0.001;
     % ====================== 仿真参数 ======================
     params.dt = 0.01;         % 时间步长(s)
-    params.t_end = 0.6;       % 仿真时长(s)
+    params.t_end = 0.5;       % 仿真时长(s)
     params.num_steps = round(params.t_end/params.dt);
 
     % ====================== 期望路径参数 ======================

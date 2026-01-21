@@ -5,7 +5,7 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
     % ================= Param Setup =================
     
     global K
-    K = 3;               % 预测时域 (Prediction Horizon)
+    K = 10;               % 预测时域 (Prediction Horizon)
     rho = 0.01;                 % 正则化权重 (Regularization weight)
     k1 = 0.01;
 
@@ -44,15 +44,25 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
    
         cvx_begin
         
-            % cvx_solver ECOS;
+            cvx_solver ECOS;
             % cvx_solver SCS;
-            cvx_solver SDPT3;
+            % cvx_solver SDPT3;
           
             variable u(3, K)
             variable nu(3, K)
-            variable NU(2, K)
-            variable psi(K)
+            expression NU(2, K)
+            expression psi(K)
             % 定义状态序列 nu (机体速度)
+
+            % nu(:, 1) = current_nu + u(:, 1);
+            NU(:, 1) = current_nu(1:2) * params.dt;
+            psi(1) = psi0 + current_nu(3) * params.dt;
+
+            for k = 1:K-1
+                % nu(:, k + 1) = nu(:, k) + u(:, k + 1);
+                NU(:, k + 1) = NU(:, k) + nu(1:2, k) * params.dt;
+                psi(k + 1) = psi(k) + nu(3, k) * params.dt; 
+            end
             
  
             % ================= 代价 =================
@@ -61,24 +71,17 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
             J = 0;
 
             for k = 1:K
-               J = J + sum_square(current_xy - path(1:2, min(params.num_steps, step + k )) + R_psi0 * NU(:, k) + [0 -1; 1 0] * current_nu(1:2) * (psi(k)));
+               J = J + sum_square(current_xy - path(1:2, min(params.num_steps, step + k )) + R_psi0 * NU(:, k) + [0 1; -1 0] * current_nu(1:2) * (psi(k) - psi0));
             end
 
             for k = 1:K
-                % J = J + k1 * sum_square(psi(k) - path(3, min(params.num_steps, step + k )) );
+                J = J + k1 * sum_square(psi(k) - path(3, min(params.num_steps, step + k )) );
             end
             
             minimize(J + 0.001 * sum_square(u(:)) + rho * sum_square(u(:) - u_hat(:)));
             % minimize(0);
 
 
-            % ================= 轮子角速度限制 =================
-
-            delta_theta = params.dt * params.phidotmax;
-
-            global R;
-            R = [cos(delta_theta), -sin(delta_theta);
-                 sin(delta_theta),  cos(delta_theta)];
     
 
 
@@ -91,13 +94,13 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
             % ================= 动力学约束 =================
 
             nu(:, 1) == current_nu + u(:, 1);
-            NU(:, 1) == current_nu(1:2) * params.dt;
-            psi(1) == psi0 + current_nu(3) * params.dt;
+            % NU(:, 1) == current_nu(1:2) * params.dt;
+            % psi(1) == psi0 + current_nu(3) * params.dt;
 
             for k = 1:K-1
                 nu(:, k + 1) == nu(:, k) + u(:, k + 1); 
-                NU(:, k + 1) == NU(:, k) + nu(1:2, k) * params.dt;
-                psi(k + 1) == psi(k) + nu(3, k) * params.dt; 
+                % NU(:, k + 1) == NU(:, k) + nu(1:2, k) * params.dt;
+                % psi(k + 1) == psi(k) + nu(3, k) * params.dt; 
             end
 
 
@@ -105,7 +108,7 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
 
             for k = 1:K
                 for n = 1:4
-                    % norm(H{n} * u(:, k), 2) <= params.vimax;
+                    norm(H{n} * nu(:, k), 2) <= params.vimax;
                     % norm(nu(:, k), 2) <= params.vimax;
                     % Cons1(u_hat, u, nu, t, n) <= 0
                     % square(nu(3,1)) <= 9;
@@ -121,7 +124,7 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
 
         fprintf('最优代价是: %f\n', cvx_optval);
         if strcmp(cvx_status, 'Solved') || strcmp(cvx_status, 'Failed')
-            fprintf('正在执行，已经进行第%d步/%d\n', k , m );
+            fprintf('正在执行，已经进行第%d步/%d\n', step , m );
         else
                 % 如果求解失败，使用上一时刻的解或全零
                 % disp(['Optimization failed at step ', num2str(k), ': ', cvx_status]);

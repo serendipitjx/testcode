@@ -9,8 +9,8 @@ function main()
     [path] = bezier_path(params.ctrl_pts, params.num_path_pts);
 
     
-    q = [0, 0];            % 初始位置(mm)
-    theta_b = 0.01;           % 初始朝向(rad)
+    q = [20, 0];            % 初始位置(mm)
+    theta_b = 0;           % 初始朝向(rad)
     v_c = 141;               % 初始速度大小(mm/s)
     vx = 100;
     vy = 100;
