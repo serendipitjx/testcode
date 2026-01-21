@@ -9,11 +9,11 @@ function main()
     [path] = bezier_path(params.ctrl_pts, params.num_path_pts);
 
     
-    q = [0, 0];            % 初始位置(m)
+    q = [0, 0];            % 初始位置(mm)
     theta_b = 0;           % 初始朝向(rad)
-    v_c = 0.001;               % 初始速度大小(m/s)
-    vx = 0.001;
-    vy = 0.001;
+    v_c = 1;               % 初始速度大小(mm/s)
+    vx = 1;
+    vy = 1;
     omega_b = 0.001;
     
     q_history = zeros(params.num_steps, 2);
@@ -42,28 +42,29 @@ function main()
         v_c = sqrt(vx^2+vy^2);
         psiv = atan2(vy,vx);
         omega_b= new_state_dot(3);
-        theta_b = theta_b + omega_b * params.dt;
-        q = q + [vx , vy]* params.dt;
-        state_dot = new_state_dot;
-        % 推算各个轮子速度
-        phi = [0;0;0;0];
+          phi = [0;0;0;0];
         vi = [0;0;0;0];
         cos_theta = cos(theta_b);
         sin_theta = sin(theta_b);
-        vx_B = vx * cos_theta + vy * sin_theta;  % 机体系x向速度
-        vy_B = -vx * sin_theta + vy * cos_theta; % 机体系y向速度
       
         for i = 1:4
         Hj = [1,0,-params.wheel_pos(i,2);0,1,params.wheel_pos(i,1)];
-        vi_matrix = Hj*[vx_B ; vy_B ; omega_b];
-        vxi = vi_matrix(1);
-        vyi = vi_matrix(2);
+        zn = Hj * [cos_theta,sin_theta,0;-sin_theta,cos_theta,0;0,0,1] * new_state_dot;
+        vxi = zn(1);
+        vyi = zn(2);
         vi(i) = sqrt(vxi^2+vyi^2);
         phi(i) = atan2(vyi,vxi);
         end
 
         vi_history(k,:) = vi;
         phi_history(k,:) = phi;
+
+
+        theta_b = theta_b + omega_b * params.dt;
+        q = q + [vx , vy]* params.dt;
+        state_dot = new_state_dot;
+    
+      
         
         
         

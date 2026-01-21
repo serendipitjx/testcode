@@ -4,20 +4,21 @@ function [new_state_dot] = control_RSS(path, k, state_dot, state)
    
     % ================= Param Setup =================
     psi0=state(3);
+    global K;
     K = 5;                     % 预测时域 (Prediction Horizon)
     dt = params.dt;
     rho = 0.01;                  % 正则化权重 (Regularization weight)
     alpha = zeros(3,K);
     k1=0.1;
+    global xInit ;
+    
     % 提取当前状态
-    current_xy = [state(1),state(2)]'; % [x; y]全局速度
-  
-
-    current_theta = state(3);   % theta
+    current_xy = [state(1),state(2)]';
+    current_theta = state(3);   
     current_nu = [cos(psi0),sin(psi0),0;-sin(psi0),cos(psi0),0;0,0,1]*state_dot;     % [vx; vy; omega] (Body Frame)
-    
+    xInit=current_nu;
     % Wheel_i_vel = H{i} * nu
-    
+    global H;
     H = cell(1, 4);
     for i = 1:4
        
@@ -31,7 +32,7 @@ function [new_state_dot] = control_RSS(path, k, state_dot, state)
     u_prev=alpha;
    
     cvx_solver ECOS; % 或者用 OSQP/ECOS，对于MPC通常比SCS更快
-      cvx_begin 
+    cvx_begin 
       
             variable u(3, K) % 控制增量 [ax; ay; alpha] * dt
             variable nu(3, K+1)
@@ -45,15 +46,14 @@ function [new_state_dot] = control_RSS(path, k, state_dot, state)
             expression summ2(K,4)
            
             
-            R_psi0 =[cos(psi0),-sin(psi0);sin(psi0),cos(psi0)];
+            R_psi0 = [cos(psi0),-sin(psi0);sin(psi0),cos(psi0)];
             S=[1.1,0.1,0.01;0.1,1,0.01];
             C_1 = R_psi0 * S .*dt;
             
            
-            for t = 2:K
-              
-               
-               J = J + sum_square(current_xy - path(1:2,min(params.num_steps, t+k-1)) + C_1 * NU(:,t)) + k1 * sum_square(psi0 + sumomega(t) * dt - path(3, min(params.num_steps, t+k-1)));
+            for t = 2:K  
+               J = J + sum_square(current_xy - path(1:2,min(params.num_steps, t+k-1)) + C_1 * NU(:,t));
+               J = J + k1 * sum_square(psi0 + sumomega(t) * dt - path(3, min(params.num_steps, t+k-1)));
             end
   
             %path(1:2,min(params.num_steps,t+k))
@@ -68,46 +68,30 @@ function [new_state_dot] = control_RSS(path, k, state_dot, state)
         
      
        
-        R=[cos(params.phidotmax*dt),-sin(params.phidotmax*dt);sin(params.phidotmax*dt),cos(params.phidotmax*dt)];
-        u_cumsum = [zeros(3, 1), cumsum(alpha(:, 1:K-1), 2)]; 
-        nu_hat= repmat(current_nu, 1, K) + u_cumsum;
+        global R;
+        R = [cos(params.phidotmax*dt), -sin(params.phidotmax*dt);
+             sin(params.phidotmax*dt),  cos(params.phidotmax*dt)];
+
+
         subject to
-            nu(:, 1) == current_nu;
-            for t = 1:K-1
-                nu(:, t+1) == nu(:, t) + u(:, t);
-            end
-            for s=1:K
-                v=zeros(K+1,1);
-                v(1:s)=1;
-            NU(:, s) == nu * v;
-            sumomega(:, s) == nu(3,:) * v;
-            end
-          for l=1:K
-              
-            for ii=1:4
-                summ1(l,ii)=0;
-                summ2(l,ii)=0;
-              for jj=1:l-1
-                 summ1(l,ii) =summ1(l,ii)+( (eye(2) + R ) * H{ii} * nu_hat(:,l) + R * H{ii} * alpha(:,l) )' * (eye(2) + R ) * H{ii} * ( u(:,jj) - alpha(:,jj) );
-                 summ2 (l,ii)=summ2(l,ii)+( (eye(2) + R') * H{ii} * nu_hat(:,l) + R'* H{ii} * alpha(:,l) )' * (eye(2) + R') * H{ii} * ( u(:,jj) - alpha(:,jj) );
-              end 
-          
-           0.5 * sum_square((H{ii} * nu(:,l)) ) + 0.5 * sum_square((H{ii} * (nu(:,l) + u(:,l)) ))...
-           -(0.5 * sum_square( ( ( eye(2) + R ) * H{ii} * nu_hat(:,l) + R * H{ii} * alpha(:,l)) )+(( eye(2) + R ) * H{ii} * nu_hat(:,l) + R * H{ii} * alpha(:,l))'...
-          * R * H{ii} * ( u(:,l) - alpha(:,l)) + summ1(l, ii)) <= 0;
-
-          0.5 * sum_square( H{ii} * nu(:,l) )  + 0.5 * sum_square((H{ii} * (nu(:,l) + u(:,l))))...
-          -(0.5 * sum_square( ( eye(2) + R') * H{ii} * nu_hat(:,l) + R' * H{ii} * alpha(:,l) )+(( eye(2) + R') * H{ii} * nu_hat(:,l) + R'* H{ii} * alpha(:,l))'...
-          * R'* H{ii} * ( u(:,l) - alpha(:,l)) + summ2(l, ii)) <= 0;
-
-            if(l>1)  
-            norm(H{ii} * nu(:,l), 2) <= params.vimax;
-            end
-            end
+          for  t=1:K
+             for n = 1:4
+              nu(:, 1) == current_nu;
+                    for t = 1:K-1
+                     nu(:, t+1) == nu(:, t) + u(:, t);
+                    end
+                    for s = 1:K
+                     v=zeros(K+1,1);
+                     v(1:s)=1;
+                     NU(:, s) == nu * v;
+                     sumomega(:, s) == nu(3,:) * v;
+                    end
+           % Cons1(alpha, u, nu, t, n) <= 0
+           norm( H{n} * [cos(psi0),-sin(psi0),0;sin(psi0),cos(psi0),0;0,0,1] * nu(:,t), 2) <= params.vimax;
+              end
           end
-        
-      %}
-          cvx_end
+    
+    cvx_end
           fprintf('最优代价是: %f\n', cvx_optval);
         if strcmp(cvx_status, 'Solved') || strcmp(cvx_status, 'Failed')
             
@@ -120,17 +104,50 @@ function [new_state_dot] = control_RSS(path, k, state_dot, state)
       % if(abs(J_prev-cvx_optval)<1)
       %      break
       %  end
-     %     J_prev=cvx_optval;
-     if(norm(u-alpha))
-     end
+      %     J_prev=cvx_optval;
+    
        if any(isnan(u(:)))
-    u = alpha; 
-   
+       u = alpha; 
        end
 
        alpha = u;
     end
     % 输出下一步的状态导数 (即下一步的速度)
     % nu^{k+1} = nu^k + u^k
-    new_state_dot =0.999 * [cos(state(3)),-sin(state(3)),0;sin(state(3)),cos(state(3)),0;0,0,1]*(current_nu + u(:, 1));
+    new_state_dot = 0.98 * [cos(state(3)),-sin(state(3)),0;sin(state(3)),cos(state(3)),0;0,0,1]*(current_nu + u(:, 1));
 end
+function out = Cons1(alpha, u, nu, l,ii)
+    global R;
+    global K;
+    global xInit;
+    global H;
+    u_cumsum = [zeros(3, 1), cumsum(alpha(:, 1:K-1), 2)]; 
+    xs= repmat(xInit, 1, K) + u_cumsum;
+    LH = 0;
+    for j = 1:l-1
+        LH = LH +2 * ((eye(2)+R)* H{ii}* xs(:,j)+ R * H{ii} * alpha(:,j))' * ( eye(2) + R ) * H{ii}*(u(:,j)-alpha(:,j));
+    end
+    LH = LH + 2 * ((eye(2)+R) * H{ii} * xs(:,l)+R*H{ii}*alpha(:,l))'*(eye(2) + R)*H{ii}*(u(:,l)-alpha(:,l));
+    
+    out =  ( H{ii} * nu(:,l))'*(H{ii} * nu(:,l))  + ( H{ii} * (nu(:,l) + u(:,l)))'*(H{ii} * (nu(:,l) + u(:,l)) )...
+           - ( ( eye(2) + R ) * H{ii} * xs(:,l) + R * H{ii} * alpha(:,l))'* (( eye(2) + R ) * H{ii} * xs(:,l) + R * H{ii} * alpha(:,l))...
+          -  2*( ( eye(2) + R ) * H{ii} * xs(:,l) + R * H{ii} * alpha(:,l))'* R * H{ii} * ( u(:,l) - alpha(:,l))- LH;
+end
+
+%{
+function out = Cons2(alpha, u, nu , i)
+    global R;
+    global K;
+    global xInit;
+    global H;
+    xs = repmat(xInit, [1, K]) + alpha * (triu(ones(K)) - eye(K));
+
+    LH = 0;
+    for j = 1:i-1
+        LH = LH + 2 * (u(:, j) - alpha(:, j))' * (xs(:, i) + R * alpha(:, i));
+    end
+    LH = LH - 2 * (u(:, i) - alpha(:, i))' * R * (xs(:, i) + R * alpha(:, i));
+
+    out = u(:, i)' * R' * R * u(:, i) - (xs(:, i) + R * alpha(:, i))' * (xs(:, i) + R * alpha(:, i)) - LH;
+end
+%}

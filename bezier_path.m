@@ -1,6 +1,6 @@
 % 辅助子函数：生成贝塞尔路径以及期望朝向路径，path为3*N矩阵
 function [path] = bezier_path(ctrl_pts, num_pts)
-    t = linspace(0, 1, num_pts);
+    t = linspace(0, 1, 100);
     n = size(ctrl_pts,1)-1;
     path_x = 0; path_y = 0;
     for i = 0:n
