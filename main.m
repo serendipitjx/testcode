@@ -9,11 +9,11 @@ function main()
     [path] = bezier_path(params.ctrl_pts, params.num_path_pts);
 
     
-    q = [20, 0];            % 初始位置(mm)
+    q = [0.050, 0.1];            % 初始位置(mm)
     theta_b = 0;           % 初始朝向(rad)
-    v_c = 141;               % 初始速度大小(mm/s)
-    vx = 100;
-    vy = 100;
+    v_c = 0.141;               % 初始速度大小(mm/s)
+    vx = 0.1;
+    vy = 0.1;
     omega_b = 0.001;
     
     q_history = zeros(params.num_steps, 2);
@@ -30,7 +30,7 @@ function main()
         t = (k-1)*params.dt;
         t_history(k) = t;
         q_history(k,:) = q;
-        vc_history(k) = v_c;
+        vc_history(k) = theta_b;
         state = [q , theta_b];
        
         if((path(1,end)-q(1))^2+(path(2,end)-q(2))^2>0.001)    

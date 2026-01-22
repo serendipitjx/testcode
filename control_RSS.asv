@@ -8,7 +8,7 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
     K = 6;               % 预测时域 (Prediction Horizon)
     rho = 0.0;                 % 正则化权重 (Regularization weight)
     k1 = 0.01;
-    gamma = 0.9;
+
 
     
     
@@ -44,9 +44,9 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
    
         cvx_begin
         
-            cvx_solver ECOS;
+            % cvx_solver ECOS;
             % cvx_solver SCS;
-            % cvx_solver SDPT3;
+            cvx_solver SDPT3;
           
             variable u(3, K)
             variable nu(3, K)
@@ -71,14 +71,14 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
             J = 0;
 
             for k = 2:K
-               J = J + 30 * power(gamma, k) * sum_square(current_xy - path(1:2, min(size(path, 2), min(params.num_steps, step + k) )) + R_psi0 * NU(:, k) + [0 0; 0 0] * state_dot(1:2) * (psi(k-1) - psi0));
+               J = J + 10 * sum_square(current_xy - path(1:2, min(size(path, 2), min(params.num_steps, step + k) )) + R_psi0 * NU(:, k) + [0 0; 0 0] * state_dot(1:2) * (psi(k-1) - psi0));
             end
 
             for k = 2:K
                 J = J + k1 * sum_square(psi(k) - path(3, min(size(path, 2), min(params.num_steps, step + k) )) );
             end
             
-            minimize(J + 0.3 * sum_square(u(:)) + rho * sum_square(u(:) - u_hat(:)));
+            minimize(J + 0.001 * sum_square(u(:)) + rho * sum_square(u(:) - u_hat(:)));
             % minimize(0);
 
 
@@ -114,8 +114,8 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
                     % square(nu(3,1)) <= 9;
                 end
                 % norm(nu(:, k), 2) <= 0.8 * params.vimax;
-                norm(u(1:2, k), 2) * params.dt <= 1;
-                norm(u(3, k), 2) * params.dt <= 0.3;
+                % norm(u(1:2, k), 2) * params.dt <= 5;
+                % norm(u(3, k), 2) * params.dt <= 1;
             end
 
         cvx_end
