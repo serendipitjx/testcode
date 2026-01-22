@@ -14,6 +14,7 @@ function plot_results(q_history, vi_history, phidot_history, vc_history, t_histo
     subplot(2,2,2);
     plot(t_history, phidot_history(:,1:4), 'LineWidth', 1);
     hold on; plot([0, max(t_history)], [params.phidotmax, params.phidotmax], 'b--', 'LineWidth', 2, 'DisplayName', '最大转向速度');
+     plot([0, max(t_history)], [-params.phidotmax, -params.phidotmax], 'b--', 'LineWidth', 2, 'DisplayName', '最大转向速度');
     xlabel('时间 (s)'); ylabel('转向速度 (rad/s)'); title('Fig6: 车轮转向速度');
     legend('车轮1','车轮2','车轮3','车轮4','最大转向速度'); grid on;
 
