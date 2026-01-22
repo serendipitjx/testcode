@@ -1,4 +1,4 @@
-function plot_results(q_history, vi_history, phidot_history, vc_history, t_history,path)
+function plot_results(q_history, vi_history, phidot_history, psi_history, t_history,path)
    params = config();
     figure('Position', [100, 100, 1200, 800]);
   path_x=path(1,:);
@@ -27,7 +27,7 @@ function plot_results(q_history, vi_history, phidot_history, vc_history, t_histo
 
     % Fig8：基座速度指令
     subplot(2,2,4);
-    plot(t_history, vc_history, 'b-', 'LineWidth', 1.5);
-    xlabel('时间 (s)'); ylabel('基座速度指令 (m/s)'); title('Fig8: 基座速度指令');
+    plot(t_history, psi_history, 'b-', 'LineWidth', 1.5);
+    xlabel('时间 (s)'); ylabel('朝向角度'); title('Fig8: 朝向角度');
     grid on;
 end

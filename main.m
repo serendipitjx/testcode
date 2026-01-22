@@ -10,16 +10,16 @@ function main()
 
     
     q = [0.050, 0.1];            % 初始位置(mm)
-    theta_b = 0;           % 初始朝向(rad)
+    psi0 = 1;           % 初始朝向(rad)
     v_c = 0.141;               % 初始速度大小(mm/s)
-    vx = 0.1;
+    vx = 0.3;
     vy = 0.1;
     omega_b = 0.001;
     
     q_history = zeros(params.num_steps, 2);
     vi_history = zeros(params.num_steps, 4);
     phidot_history = zeros(params.num_steps, 4);
-    vc_history = zeros(params.num_steps, 1);
+    psi_history = zeros(params.num_steps, 1);
     t_history = zeros(params.num_steps, 1);
     phi_history=zeros(params.num_steps,4);
     
@@ -30,8 +30,8 @@ function main()
         t = (k-1)*params.dt;
         t_history(k) = t;
         q_history(k,:) = q;
-        vc_history(k) = theta_b;
-        state = [q , theta_b];
+        psi_history(k) = psi0;
+        state = [q , psi0];
        
         if((path(1,end)-q(1))^2+(path(2,end)-q(2))^2>0.001)    
         [new_state_dot] = control_RSS(path,k,state_dot,state);
@@ -44,8 +44,8 @@ function main()
         omega_b= new_state_dot(3);
           phi = [0;0;0;0];
         vi = [0;0;0;0];
-        cos_theta = cos(theta_b);
-        sin_theta = sin(theta_b);
+        cos_theta = cos(psi0);
+        sin_theta = sin(psi0);
       
         for i = 1:4
         Hj = [1,0,-params.wheel_pos(i,2);0,1,params.wheel_pos(i,1)];
@@ -60,7 +60,7 @@ function main()
         phi_history(k,:) = phi;
 
 
-        theta_b = theta_b + omega_b * params.dt;
+        psi0 = psi0 + omega_b * params.dt;
         q = q + [vx , vy]* params.dt;
         state_dot = new_state_dot;
     
@@ -90,7 +90,7 @@ for m = 1:params.num_steps
     phidot_history(m) = phi_val;
 end
     
-    plot_results(q_history, vi_history, [[0,0,0,0];phidot_history], vc_history, t_history, path);
+    plot_results(q_history, vi_history, [[0,0,0,0];phidot_history], psi_history, t_history, path);
     
 end
 

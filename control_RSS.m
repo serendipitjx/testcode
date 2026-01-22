@@ -146,7 +146,7 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
 
     % 输出下一步的状态导数 (即下一步的速度)
     % nu^{k+1} = nu^k + u^k
-    new_state_dot = current_nu + 1.00 * [cos(state(3)), -sin(state(3)), 0;
+    new_state_dot = state_dot + 1.00 * [cos(state(3)), -sin(state(3)), 0;
                                          sin(state(3)),  cos(state(3)), 0;
                                                      0,              0, 1] * u(:, 1);
 end
