@@ -71,11 +71,11 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
             J = 0;
 
             for k = 1:K
-               J = J + sum_square(current_xy - path(1:2, min(params.num_steps, step + k )) + R_psi0 * NU(:, k) + [0 1; -1 0] * current_nu(1:2) * (psi(k) - psi0));
+               J = J + sum_square(current_xy - path(1:2, min(size(path, 2), min(params.num_steps, step + k) )) + R_psi0 * NU(:, k) + [0 1; -1 0] * current_nu(1:2) * (psi(k) - psi0));
             end
 
             for k = 1:K
-                J = J + k1 * sum_square(psi(k) - path(3, min(params.num_steps, step + k )) );
+                J = J + k1 * sum_square(psi(k) - path(3, min(size(path, 2), min(params.num_steps, step + k) )) );
             end
             
             minimize(J + 0.001 * sum_square(u(:)) + rho * sum_square(u(:) - u_hat(:)));
@@ -113,6 +113,7 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
                     % Cons1(u_hat, u, nu, t, n) <= 0
                     % square(nu(3,1)) <= 9;
                 end
+                norm(nu(:, k), 2) <= 0.8 * params.vimax;
             end
 
         cvx_end
@@ -140,29 +141,37 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
 
     % 输出下一步的状态导数 (即下一步的速度)
     % nu^{k+1} = nu^k + u^k
-    new_state_dot = current_nu + 0.98 * [cos(state(3)), -sin(state(3)), 0;
+    new_state_dot = current_nu + 1 * [cos(state(3)), -sin(state(3)), 0;
                                          sin(state(3)),  cos(state(3)), 0;
                                                      0,              0, 1] * u(:, 1);
 end
 
 
 
-function out = Cons1(alpha, u, nu, l,ii)
-    global R;
+function out = Cons1(u_hat, u, nu, k, n)
+
+% ================= 轮子角速度限制 =================
+
+    delta_theta = params.dt * params.phidotmax;
+
+    R = [cos(delta_theta), -sin(delta_theta);
+         sin(delta_theta),  cos(delta_theta)];
+
     global K;
     global xInit;
     global H;
-    u_cumsum = [zeros(3, 1), cumsum(alpha(:, 1:K-1), 2)]; 
+    u_cumsum = [zeros(3, 1), cumsum(u_hat(:, 1:K-1), 2)]; 
     xs= repmat(xInit, 1, K) + u_cumsum;
     LH = 0;
-    for j = 1:l-1
-        LH = LH +2 * ((eye(2)+R)* H{ii}* xs(:,j)+ R * H{ii} * alpha(:,j))' * ( eye(2) + R ) * H{ii}*(u(:,j)-alpha(:,j));
+    for l = 1:k-1
+        LH = LH +2 * ((eye(2)+R)* H{n}* xs(:,l)+ R * H{n} * u_hat(:,l))' * ( eye(2) + R ) * H{n}*(u(:,l)-u_hat(:,l));
     end
-    LH = LH + 2 * ((eye(2)+R) * H{ii} * xs(:,l)+R*H{ii}*alpha(:,l))'*(eye(2) + R)*H{ii}*(u(:,l)-alpha(:,l));
+    LH = LH + 2 * ((eye(2)+R) * H{n} * xs(:,k)+R*H{n}*u_hat(:,k))'*(eye(2) + R)*H{n}*(u(:,k)-u_hat(:,k));
     
-    out =  ( H{ii} * nu(:,l))'*(H{ii} * nu(:,l))  + ( H{ii} * (nu(:,l) + u(:,l)))'*(H{ii} * (nu(:,l) + u(:,l)) )...
-           - ( ( eye(2) + R ) * H{ii} * xs(:,l) + R * H{ii} * alpha(:,l))'* (( eye(2) + R ) * H{ii} * xs(:,l) + R * H{ii} * alpha(:,l))...
-          -  2*( ( eye(2) + R ) * H{ii} * xs(:,l) + R * H{ii} * alpha(:,l))'* R * H{ii} * ( u(:,l) - alpha(:,l))- LH;
+    expression out;
+    out =  ( H{n} * nu(:,k))'*(H{n} * nu(:,k))  + ( H{n} * (nu(:,k) + u(:,k)))'*(H{n} * (nu(:,k) + u(:,k)) )...
+           - ( ( eye(2) + R ) * H{n} * xs(:,k) + R * H{n} * u_hat(:,k))'* (( eye(2) + R ) * H{n} * xs(:,k) + R * H{n} * u_hat(:,k))...
+          -  2*( ( eye(2) + R ) * H{n} * xs(:,k) + R * H{n} * u_hat(:,k))'* R * H{n} * ( u(:,k) - u_hat(:,k))- LH;
 end
 
 %{
