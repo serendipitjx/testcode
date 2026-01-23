@@ -5,7 +5,7 @@ function [new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
     % ================= Param Setup =================
     
     global K
-    K = 3;               % 预测时域 (Prediction Horizon)
+    K = 6;               % 预测时域 (Prediction Horizon)
     rho = 0.01;                 % 正则化权重 (Regularization weight)
     k1 = 1;
     gamma = 0.9;
@@ -154,12 +154,12 @@ function [new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
 
 
                     if k == 1
-                        % current_nu' * H{n}' * R * H{n} * (current_nu + u(:, 1)) >= 0;
+                        % current_nu' * H{n}' * R * H{n} * (current_nu + u(:, 1)) >= 0.001;
 
                         sum_square(H{n} * current_nu) + sum_square( H{n} * (current_nu + u(:, k)) )...
                             - sum_square( (eye(2) + R) * H{n} * current_nu + R * H{n} * u_hat(:, k) )...
                             - 2 * ((eye(2) + R)* H{n} * current_nu + R * H{n} * u_hat(:, k))' * R * H{n} * (u(:, k) - u_hat(:, k) )...
-                            <= 0;
+                            <= -0.01;
                     end
 
 
@@ -194,12 +194,12 @@ function [new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
 
 
                     if k == 1
-                        % current_nu' * H{n}' * R * H{n} * (current_nu + u(:, 1)) >= 0;
+                        % current_nu' * H{n}' * R * H{n} * (current_nu + u(:, 1)) >= 0.001;
 
                         sum_square(H{n} * current_nu) + sum_square( H{n} * (current_nu + u(:, k)) )...
                             - sum_square( (eye(2) + R) * H{n} * current_nu + R * H{n} * u_hat(:, k) )...
                             - 2 * ((eye(2) + R)* H{n} * current_nu + R * H{n} * u_hat(:, k))' * R * H{n} * (u(:, k) - u_hat(:, k) )...
-                            <= 0;
+                            <= -0.01;
                     end
 
 
