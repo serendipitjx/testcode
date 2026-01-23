@@ -34,7 +34,7 @@ function main()
         state = [q , psi0];
        
         if((path(1,end)-q(1))^2+(path(2,end)-q(2))^2>0.001)    
-        [new_state_dot] = control_RSS(path,k,state_dot,state);
+        [new_state_dot, velocity] = control_RSS(path,k,state_dot,state);
         % 更新状态
         end
         vx = new_state_dot(1);
@@ -49,7 +49,7 @@ function main()
       
         for i = 1:4
         Hj = [1,0,-params.wheel_pos(i,2);0,1,params.wheel_pos(i,1)];
-        zn = Hj * [cos_theta,sin_theta,0;-sin_theta,cos_theta,0;0,0,1] * new_state_dot;
+        zn = Hj * velocity;
         vxi = zn(1);
         vyi = zn(2);
         vi(i) = sqrt(vxi^2+vyi^2);
@@ -69,7 +69,7 @@ function main()
         
         
     end
-    phidot_history = diff(phi_history);
+    phidot_history = diff(phi_history) / params.dt;
     % 角度归一化：将phidot_history每个元素限制在(-π, π]区间（更通用的写法）
 for m = 1:params.num_steps
     % 先取第m个元素（避免重复索引）
