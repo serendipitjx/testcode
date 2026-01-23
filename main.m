@@ -69,14 +69,14 @@ function main()
         
         
     end
-    phidot_history = diff(phi_history) / params.dt;
+    phidot_history = diff(phi_history);
     % 角度归一化：将phidot_history每个元素限制在(-π, π]区间（更通用的写法）
 for m = 1:params.num_steps
     % 先取第m个元素（避免重复索引）
     phi_val = phidot_history(m);
     
     % 方法1：用mod函数直接归一化（MATLAB内置函数，最简洁）
-    phi_val = mod(phi_val + pi, 2*pi) - pi;
+    phi_val = mod(phi_val + pi, 2 * pi) - pi;
     
     % 方法2：手动归一化（替代while，避免死循环）
     % while phi_val > pi
@@ -87,7 +87,7 @@ for m = 1:params.num_steps
     % end
     
     % 将归一化后的值写回数组
-    phidot_history(m) = phi_val;
+    phidot_history(m) = phi_val / params.dt;
 end
     
     plot_results(q_history, vi_history, [[0,0,0,0];phidot_history], psi_history, t_history, path);

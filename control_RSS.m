@@ -5,10 +5,9 @@ function [new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
     % ================= Param Setup =================
     
     global K
-    K = 3;               % 预测时域 (Prediction Horizon)
+    K = 6;               % 预测时域 (Prediction Horizon)
     rho = 0.01;                 % 正则化权重 (Regularization weight)
     k1 = 1;
-    gamma = 0.9;
 
     
     
@@ -71,7 +70,7 @@ function [new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
             J = 0;
 
             for k = 2:K
-               J = J + 30 * power(gamma, k) * sum_square(current_xy - path(1:2, min(size(path, 2), min(params.num_steps, step + k) )) + R_psi0 * NU(:, k) + [0 0; 0 0] * state_dot(1:2) * (psi(k-1) - psi0));
+               J = J + 30 * sum_square(current_xy - path(1:2, min(size(path, 2), min(params.num_steps, step + k) )) + R_psi0 * NU(:, k) + [0 0; 0 0] * state_dot(1:2) * (psi(k-1) - psi0));
             end
 
             for k = 2:K
@@ -111,9 +110,6 @@ function [new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
                     norm(H{n} * nu(:, k), 2) <= params.vimax;
                     % norm(nu(:, k), 2) <= params.vimax;
                 end
-                % norm(nu(:, k), 2) <= 0.8 * params.vimax;
-                % norm(u(1:2, k), 2) * params.dt <= 1;
-                % norm(u(3, k), 2) * params.dt <= 0.3;
             end
 
 

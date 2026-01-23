@@ -5,8 +5,8 @@ function params = config()
     params.a = params.Lx/2;   % 车轮x向偏移(mm)
     params.b = params.Ly/2;   % 车轮y向偏移(mm)
     params.wheel_pos = [params.a, params.b; -params.a, params.b; -params.a, -params.b; params.a, -params.b]; % 4车轮位置
-    params.vimax = 3;     % 最大驱动速度(mm/s)
-    params.phidotmax = 20 * pi;   % 最大转向速度(rad/s)
+    params.vimax = 5;     % 最大驱动速度(mm/s)
+    params.phidotmax = 5 * pi;   % 最大转向速度(rad/s)
 
     % ====================== 控制器参数 ======================
     params.k1 = 0.1;
@@ -15,7 +15,7 @@ function params = config()
     params.eps = 0.001;
     % ====================== 仿真参数 ======================
     params.dt = 0.01;         % 时间步长(s)
-    params.t_end = 0.8;       % 仿真时长(s)
+    params.t_end = 1.1;       % 仿真时长(s)
     params.num_steps = round(params.t_end/params.dt);
 
     % ====================== 期望路径参数 ======================

@@ -1,14 +1,13 @@
-function [new_state_dot] = control_RSS(path, step, state_dot, state)
+function [new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
     
     params = config();
    
     % ================= Param Setup =================
     
     global K
-    K = 3;               % 预测时域 (Prediction Horizon)
+    K = 6;               % 预测时域 (Prediction Horizon)
     rho = 0.01;                 % 正则化权重 (Regularization weight)
     k1 = 1;
-    gamma = 0.9;
 
     
     
@@ -34,7 +33,7 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
 
 
     % ================= 迭代 Setup =================
-    max_iter = 1; 
+    max_iter = 3; 
     u_hat = zeros(3,K); % 猜测解
 
     % ================= 一层循环开始 =======================================
@@ -71,7 +70,7 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
             J = 0;
 
             for k = 2:K
-               J = J + 30 * power(gamma, k) * sum_square(current_xy - path(1:2, min(size(path, 2), min(params.num_steps, step + k) )) + R_psi0 * NU(:, k) + [0 0; 0 0] * state_dot(1:2) * (psi(k-1) - psi0));
+               J = J + 30 * sum_square(current_xy - path(1:2, min(size(path, 2), min(params.num_steps, step + k) )) + R_psi0 * NU(:, k) + [0 0; 0 0] * state_dot(1:2) * (psi(k-1) - psi0));
             end
 
             for k = 2:K
@@ -111,9 +110,6 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
                     norm(H{n} * nu(:, k), 2) <= params.vimax;
                     % norm(nu(:, k), 2) <= params.vimax;
                 end
-                % norm(nu(:, k), 2) <= 0.8 * params.vimax;
-                norm(u(1:2, k), 2) * params.dt <= 1;
-                norm(u(3, k), 2) * params.dt <= 0.3;
             end
 
 
@@ -121,8 +117,8 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
 
             delta_theta = params.dt * params.phidotmax;
 
-            R = [cos(delta_theta), -sin(delta_theta);
-                 sin(delta_theta),  cos(delta_theta)];
+            R = [sin(delta_theta), -cos(delta_theta);
+                 cos(delta_theta),  sin(delta_theta)];
 
             nu_hat = zeros(3, K);
             nu_hat(:, 1) = current_nu + u_hat(:, 1);
@@ -154,7 +150,52 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
 
 
                     if k == 1
-                        current_nu' * H{n}' * R * H{n} * (current_nu + u(:, 1)) >= 0;
+                        % current_nu' * H{n}' * R * H{n} * (current_nu + u(:, 1)) >= 0;
+
+                        sum_square(H{n} * current_nu) + sum_square( H{n} * (current_nu + u(:, k)) )...
+                            - sum_square( (eye(2) + R) * H{n} * current_nu + R * H{n} * u_hat(:, k) )...
+                            - 2 * ((eye(2) + R)* H{n} * current_nu + R * H{n} * u_hat(:, k))' * R * H{n} * (u(:, k) - u_hat(:, k) )...
+                            <= 0;
+                    end
+
+
+                end
+            end
+
+
+            R = [sin(delta_theta), cos(delta_theta);
+                 -cos(delta_theta),  sin(delta_theta)];
+
+            for k = 1:K
+                for n = 1:4
+                    
+                    expression LH;
+                    LH = 0;
+
+                    if k > 1
+                        for l = 1:k-1
+                            LH = LH + 2 * ((eye(2) + R)* H{n} * nu_hat(:, k - 1) + R * H{n} * u_hat(:, k))' * ( eye(2) + R ) * H{n} * (u(:, l) - u_hat(:, l) );
+                        end
+
+                        LH = LH + 2 * ((eye(2) + R)* H{n} * nu_hat(:, k - 1) + R * H{n} * u_hat(:, k))' * R * H{n} * (u(:, k) - u_hat(:, k) );
+                    end
+
+
+                    if k > 1
+                        sum_square(H{n} * nu(:, k - 1)) + sum_square( H{n} * (nu(:, k - 1) + u(:, k)) )...
+                            - sum_square( (eye(2) + R) * H{n} * nu_hat(:, k-1) + R * H{n} * u_hat(:, k) )...
+                            - LH <= 0;
+
+                    end
+
+
+                    if k == 1
+                        % current_nu' * H{n}' * R * H{n} * (current_nu + u(:, 1)) >= 0;
+
+                        sum_square(H{n} * current_nu) + sum_square( H{n} * (current_nu + u(:, k)) )...
+                            - sum_square( (eye(2) + R) * H{n} * current_nu + R * H{n} * u_hat(:, k) )...
+                            - 2 * ((eye(2) + R)* H{n} * current_nu + R * H{n} * u_hat(:, k))' * R * H{n} * (u(:, k) - u_hat(:, k) )...
+                            <= 0;
                     end
 
 
@@ -189,57 +230,7 @@ function [new_state_dot] = control_RSS(path, step, state_dot, state)
     new_state_dot = state_dot + 1.00 * [cos(state(3)), -sin(state(3)), 0;
                                          sin(state(3)),  cos(state(3)), 0;
                                                      0,              0, 1] * u(:, 1);
-end
 
+    velocity = current_nu + u(:, 1);
 
-
-function out = Cons1(u_hat, u, nu, k, n, nu_hat)
-    params = config();
-% ================= 轮子角速度限制 =================
-
-    delta_theta = params.dt * params.phidotmax;
-
-    R = [cos(delta_theta), -sin(delta_theta);
-         sin(delta_theta),  cos(delta_theta)];
-
-    global H;
-
-    expression LH;
-    LH = 0;
-
-    for l = 1:k
-        LH = LH + 2 * ((eye(2) + R)* H{n} * nu_hat(:, k) + R * H{n} * u_hat(:, k))' * ( eye(2) + R ) * H{n} * (u(:, l) - u_hat(:, l) );
-    end
-    
-    
-    expression out;
-    out =  ( H{n} * nu(:,k))' *(H{n} * nu(:,k))  + ( H{n} * (nu(:,k) + u(:,k)) )'*(H{n} * (nu(:,k) + u(:,k)) )...
-           - ( ( eye(2) + R ) * H{n} * nu_hat(:,k) + R * H{n} * u_hat(:,k))'* (( eye(2) + R ) * H{n} * nu_hat(:,k) + R * H{n} * u_hat(:,k))...
-          -  2 *( ( eye(2) + R ) * H{n} * nu_hat(:,k) + R * H{n} * u_hat(:,k))'* R * H{n} * ( u(:,k) - u_hat(:,k))- LH;
-end
-
-
-
-function out = Cons2(u_hat, u, nu, k, n, nu_hat)
-    params = config();
-% ================= 轮子角速度限制 =================
-
-    delta_theta = params.dt * params.phidotmax;
-
-    R = [cos(delta_theta), -sin(delta_theta);
-         sin(delta_theta),  cos(delta_theta)];
-
-    global H;
-
-    expression LH;
-    LH = 0;
-
-    for l = 1:k
-        LH = LH + 2 * ((eye(2) + R')* H{n} * nu_hat(:, k) + R' * H{n} * u_hat(:, k))' * ( eye(2) + R' ) * H{n} * (u(:, l)-u_hat(:, l) );
-    end
-    
-    expression out;
-    out =  ( H{n} * nu(:,k))'*(H{n} * nu(:,k))  + ( H{n} * (nu(:,k) + u(:,k)) )'*(H{n} * (nu(:,k) + u(:,k)) )...
-           - ( ( eye(2) + R' ) * H{n} * nu_hat(:,k) + R' * H{n} * u_hat(:,k))'* (( eye(2) + R' ) * H{n} * nu_hat(:,k) + R' * H{n} * u_hat(:,k))...
-          -  2 *( ( eye(2) + R' ) * H{n} * nu_hat(:,k) + R' * H{n} * u_hat(:,k))'* R * H{n} * ( u(:,k) - u_hat(:,k))- LH;
 end
