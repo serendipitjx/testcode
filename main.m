@@ -34,7 +34,7 @@ function main()
         state = [q , psi0];
        
         if((path(1,end)-q(1))^2+(path(2,end)-q(2))^2>0.001)    
-        [new_state_dot] = control_RSS(path,k,state_dot,state);
+        [new_state_dot, velocity] = control_RSS(path,k,state_dot,state);
         % 更新状态
         end
         vx = new_state_dot(1);
@@ -49,7 +49,7 @@ function main()
       
         for i = 1:4
         Hj = [1,0,-params.wheel_pos(i,2);0,1,params.wheel_pos(i,1)];
-        zn = Hj * [cos_theta,sin_theta,0;-sin_theta,cos_theta,0;0,0,1] * new_state_dot;
+        zn = Hj * velocity;
         vxi = zn(1);
         vyi = zn(2);
         vi(i) = sqrt(vxi^2+vyi^2);
@@ -76,7 +76,7 @@ for m = 1:params.num_steps
     phi_val = phidot_history(m);
     
     % 方法1：用mod函数直接归一化（MATLAB内置函数，最简洁）
-    phi_val = mod(phi_val + pi, 2*pi) - pi;
+    phi_val = mod(phi_val + pi, 2 * pi) - pi;
     
     % 方法2：手动归一化（替代while，避免死循环）
     % while phi_val > pi
@@ -87,7 +87,7 @@ for m = 1:params.num_steps
     % end
     
     % 将归一化后的值写回数组
-    phidot_history(m) = phi_val;
+    phidot_history(m) = phi_val / params.dt;
 end
     
     plot_results(q_history, vi_history, [[0,0,0,0];phidot_history], psi_history, t_history, path);
