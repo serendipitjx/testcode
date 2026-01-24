@@ -8,6 +8,7 @@ function [new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
     K = 6;               % 预测时域 (Prediction Horizon)
     rho = 0.01;                 % 正则化权重 (Regularization weight)
     k1 = 1;
+    epsilon = 0;
 
     
     
@@ -33,7 +34,7 @@ function [new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
 
 
     % ================= 迭代 Setup =================
-    max_iter = 3; 
+    max_iter = 1; 
     u_hat = zeros(3,K); % 猜测解
 
     % ================= 一层循环开始 =======================================
@@ -70,7 +71,7 @@ function [new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
             J = 0;
 
             for k = 2:K
-               J = J + 30 * sum_square(current_xy - path(1:2, min(size(path, 2), min(params.num_steps, step + k) )) + R_psi0 * NU(:, k) + [0 0; 0 0] * state_dot(1:2) * (psi(k-1) - psi0));
+                J = J + 30 * sum_square(current_xy - path(1:2, min(size(path, 2), min(params.num_steps, step + k) )) + R_psi0 * NU(:, k) + [0 0; 0 0] * state_dot(1:2) * (psi(k-1) - psi0));
             end
 
             for k = 2:K
@@ -150,12 +151,12 @@ function [new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
 
 
                     if k == 1
-                        % current_nu' * H{n}' * R * H{n} * (current_nu + u(:, 1)) >= 0;
+                        current_nu' * H{n}' * R * H{n} * (current_nu + u(:, 1)) >= epsilon;
 
-                        sum_square(H{n} * current_nu) + sum_square( H{n} * (current_nu + u(:, k)) )...
-                            - sum_square( (eye(2) + R) * H{n} * current_nu + R * H{n} * u_hat(:, k) )...
-                            - 2 * ((eye(2) + R)* H{n} * current_nu + R * H{n} * u_hat(:, k))' * R * H{n} * (u(:, k) - u_hat(:, k) )...
-                            <= 0;
+                        % sum_square(H{n} * current_nu) + sum_square( H{n} * (current_nu + u(:, k)) )...
+                        %     - sum_square( (eye(2) + R) * H{n} * current_nu + R * H{n} * u_hat(:, k) )...
+                        %     - 2 * ((eye(2) + R)* H{n} * current_nu + R * H{n} * u_hat(:, k))' * R * H{n} * (u(:, k) - u_hat(:, k) )...
+                        %     <= -epsilon;
                     end
 
 
@@ -190,12 +191,12 @@ function [new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
 
 
                     if k == 1
-                        % current_nu' * H{n}' * R * H{n} * (current_nu + u(:, 1)) >= 0;
+                        current_nu' * H{n}' * R * H{n} * (current_nu + u(:, 1)) >= epsilon;
 
-                        sum_square(H{n} * current_nu) + sum_square( H{n} * (current_nu + u(:, k)) )...
-                            - sum_square( (eye(2) + R) * H{n} * current_nu + R * H{n} * u_hat(:, k) )...
-                            - 2 * ((eye(2) + R)* H{n} * current_nu + R * H{n} * u_hat(:, k))' * R * H{n} * (u(:, k) - u_hat(:, k) )...
-                            <= 0;
+                        % sum_square(H{n} * current_nu) + sum_square( H{n} * (current_nu + u(:, k)) )...
+                        %     - sum_square( (eye(2) + R) * H{n} * current_nu + R * H{n} * u_hat(:, k) )...
+                        %     - 2 * ((eye(2) + R)* H{n} * current_nu + R * H{n} * u_hat(:, k))' * R * H{n} * (u(:, k) - u_hat(:, k) )...
+                        %     <= -epsilon;
                     end
 
 
