@@ -15,12 +15,12 @@ function main()
     % ================= 初始化=================
     
     q = [0.050, 0.1];         % 初始位置(m)(1*2)
-    psi0 = 0.1;                  % 初始朝向(rad)
+    psi0 = 0.2;                  % 初始朝向(rad)
     v_c = 0.141;               % 初始速度大小(m/s)
     vx = 0.01;
     vy = 0.01;
     omega_b = 0.01;
-    state_dot = [vx ; vy ; omega_b];    %3*1
+    last_vel = [vx ; vy ; omega_b];    %3*1
     state = [q , psi0];               %1*3
     % ================= 定义历史记录 =================
 
@@ -45,9 +45,9 @@ function main()
 
 
         % if((path(1, end)-q(1))^2 + (path(2, end)-q(2))^2 > 0.01)    
-        [new_state_dot, velocity] = control_RSS(path, k, state_dot, state);
+        [new_state_dot, velocity] = control_RSS(path, k, last_vel, state);
         % end
-
+        last_vel = velocity;
 
      %=======================得到反馈量======================
         

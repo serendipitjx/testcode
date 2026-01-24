@@ -4,7 +4,7 @@ function [new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
    
     % ================= Param Setup =================
     
-    global K
+    % global K
     K = 6;               % 预测时域 (Prediction Horizon)
     rho = 0.01;                 % 正则化权重 (Regularization weight)
     k1 = 1;
@@ -16,10 +16,11 @@ function [new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
 
     current_xy = [state(1), state(2)]';
     psi0 = state(3);
-    global current_nu
-    current_nu = [cos(psi0), sin(psi0), 0;
-                 -sin(psi0), cos(psi0), 0;
-                          0,         0, 1] * state_dot;     % [vx; vy; omega] (Body Frame)
+    % global current_nu
+    % current_nu = [cos(psi0), sin(psi0), 0;
+    %              -sin(psi0), cos(psi0), 0;
+    %                       0,         0, 1] * state_dot;     % [vx; vy; omega] (Body Frame)
+    current_nu = state_dot;
 
     R_psi0 = [cos(psi0), -sin(psi0);
               sin(psi0),  cos(psi0)];
@@ -71,11 +72,11 @@ function [new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
             J = 0;
 
             for k = 2:K
-                J = J + 30 * sum_square(current_xy - path(1:2, min(size(path, 2), min(params.num_steps, step + k) )) + R_psi0 * NU(:, k) + [0 0; 0 0] * state_dot(1:2) * (psi(k-1) - psi0));
+                J = J + 30 * sum_square(current_xy - path(1:2, min(size(path, 2), step + k) ) + R_psi0 * NU(:, k) );
             end
 
-            for k = 2:K
-                J = J + k1 * sum_square(psi(k) - path(3, min(size(path, 2), min(params.num_steps, step + k) )) );
+            for k = 1:K
+                J = J + k1 * sum_square(psi(k) - path(3, min(size(path, 2), step + k) ) );
             end
             
             minimize(J + 0.3 * sum_square(u(:)) + rho * sum_square(u(:) - u_hat(:)));
@@ -228,9 +229,9 @@ function [new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
 
     % 输出下一步的状态导数 (即下一步的速度)
     % nu^{k+1} = nu^k + u^k
-    new_state_dot = state_dot + 1.00 * [cos(state(3)), -sin(state(3)), 0;
+    new_state_dot =  [cos(state(3)), -sin(state(3)), 0;
                                          sin(state(3)),  cos(state(3)), 0;
-                                                     0,              0, 1] * u(:, 1);
+                                                     0,              0, 1] * (state_dot + 1.00 * u(:, 1));
 
     velocity = current_nu + u(:, 1);
 

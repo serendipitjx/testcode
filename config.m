@@ -6,7 +6,7 @@ function params = config()
     params.b = params.Ly/2;   % 车轮y向偏移(mm)
     params.wheel_pos = [params.a, params.b; -params.a, params.b; -params.a, -params.b; params.a, -params.b]; % 4车轮位置
     params.vimax = 5;     % 最大驱动速度(mm/s)
-    params.phidotmax = 3 * pi;   % 最大转向速度(rad/s)
+    params.phidotmax = 2 * pi;   % 最大转向速度(rad/s)
 
     % ====================== 控制器参数 ======================
     params.k1 = 0.1;
