@@ -96,7 +96,7 @@ function main()
     fprintf('RMSE是: %f\n', sqrt(sum1/params.num_steps));
     global solver_time_array
     fprintf('总用时是：%f\n',sum(solver_time_array));
-    
+    save('solver_time_array.mat')
     save('solve_time_data.mat', 'solver_time_array'); 
 end
 

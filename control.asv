@@ -1,6 +1,6 @@
-    function [new_state_dot] = control(path, k , state_dot , state)   
+    function [new_state_dot,velocity] = control(path, k , state_dot , state)   
     %% 计算s
-    persistent  s ;
+    persistent s ;
     persistent s_dot;
     if isempty(s)
         s = 0;  % 初始值
@@ -23,21 +23,20 @@
     s_list =  [0,cumsum(sqrt(dx.^2 + dy.^2))];
     Lp = s_list( end );
 
-    x = interp1(s_list , path_x, s , 'linear');
-    y = interp1(s_list , path_y, s , 'linear');
+    x = path_x(k);
+    y = path_y(k);
     Pd = [x, y];
-    dthetad_ds = (4*pi / Lp^2) * s;
+    dthetad_ds = (4*pi / Lp^2) * s_list(k);
     d2thetad_ds2 = 4*pi / Lp^2;
     dx_ds_vec = gradient(path_x, s_list);
     d2x_ds2_vec = gradient(dx_ds_vec, s_list);
     dy_ds_vec = gradient(path_y, s_list);
     d2y_ds2_vec = gradient(dy_ds_vec, s_list);
-    dx_ds = interp1(s_list, dx_ds_vec, s, 'linear');
-    dy_ds = interp1(s_list, dy_ds_vec, s, 'linear');
-    d2x_ds2 = interp1(s_list, d2x_ds2_vec, s, 'linear');
-    d2y_ds2 = interp1(s_list, d2y_ds2_vec, s, 'linear');
-    theta_d = interp1(s_list,thetad, s, 'linear');
-    
+    dx_ds =  dx_ds_vec(k);
+    dy_ds = dy_ds_vec(k);
+    d2x_ds2 = d2x_ds2_vec(k);
+    d2y_ds2 = d2y_ds2_vec(k);
+    theta_d = thetad(k);    
     % 切向角和曲率
     psit = atan2(dy_ds , dx_ds);
    
@@ -99,11 +98,11 @@
         v_candidates = [v_candidates; params.phidotmax * numer_b / denom_b];
 
     end
-     % 只保留“正的、有限的”候选速度
+     % 只保留"正的、有限的"候选速度
      v_candidates = v_candidates(~isnan(v_candidates));
      v_candidates = v_candidates(~isinf(v_candidates));
      v_candidates = abs(v_candidates);
-
+     v_
      % 再从中取最小
      new_v_c = min(v_candidates);
      new_vx =new_v_c*cos(new_psiv);
@@ -114,6 +113,8 @@
      s_dot = k_s * new_v_c;
      s = min(s + s_dot*params.dt, Lp);    
      new_state_dot=[new_vx;new_vy;new_omega_b];
+     psi0=theta_b;
+     velocity=[cos(psi0),-sin(psi0),0;sin(psi0),cos(psi0),0;0,0,1]*new_state_dot;
    % new_theta_b = theta_b + new_omega_b * params.dt;
 
     %{
