@@ -1,17 +1,12 @@
 function main()
     % ================= 清零 =================
-
     clear control
     clear static_counter
     cvx_clear
     clear all
     params = config();
     % ================= 获取初始轨迹 =================
-
-
     [path] = bezier_path(params.ctrl_pts, params.num_path_pts);
-
-
     % ================= 初始化=================
     
     q = [0.050, 0.1];         % 初始位置(m)(1*2)
@@ -23,7 +18,6 @@ function main()
     last_vel = [vx ; vy ; omega_b];    %3*1
     state = [q , psi0];               %1*3
     % ================= 定义历史记录 =================
-
     q_history = zeros(params.num_steps, 2);
     vi_history = zeros(params.num_steps, 4);
     phidot_history = zeros(params.num_steps, 4);
@@ -31,24 +25,56 @@ function main()
     t_history = zeros(params.num_steps, 1);
     phi_history = zeros(params.num_steps, 4);
     
+    figure('Position', [100, 100, 1500, 300]);
     
-
+    subplot(1, 3, 1);
+    plot(path(1,:), path(2,:), '-','Color',slanCL(1148,4),'LineWidth', 2, 'DisplayName', 'Reference Trajectory'); hold on;
+    h_q = animatedline('Marker', 'x', 'LineStyle', 'none', 'Color',slanCL(1148,2), 'LineWidth', 1.5, 'DisplayName', 'Simulation Results');
+    xlabel('x_w (m)','FontName','Times New Roman');
+    ylabel('y_w (m)','FontName','Times New Roman');
+    title('Trajectory Tracking Performance','FontName','Times New Roman');
+    legend('FontSize', 6,'FontName','Times New Roman');
+    grid on; axis equal; set(gca,'FontName','Times New Roman');
+    
+    subplot(1, 3, 2); hold on;
+    yline(params.phidotmax, '--', 'Color', slanCL(1148,5), 'LineWidth', 2, 'DisplayName', 'Constraints');
+    yline(-params.phidotmax, '--', 'Color', slanCL(1148,5), 'LineWidth', 2, 'HandleVisibility', 'off');
+    h_phidot = gobjects(4,1);
+    for idx = 1:4
+        h_phidot(idx) = animatedline('Color', slanCL(1148,idx), 'LineWidth', 1.7, 'DisplayName', ['Wheel ' num2str(idx)]);
+    end
+    xlabel('Time(s)','FontName','Times New Roman'); 
+    ylabel('Steering rate (rad/s)','FontName','Times New Roman'); 
+    title('Steering Rate of Each Wheel','FontName','Times New Roman');
+    legend('FontSize', 6,'FontName','Times New Roman'); 
+    grid on; set(gca,'FontName','Times New Roman');
+    
+    subplot(1, 3, 3); hold on;
+    yline(params.vimax, '--', 'Color', slanCL(1148,5), 'LineWidth', 2, 'DisplayName', 'Constraints');
+    h_vi = gobjects(4,1);
+    for idx = 1:4
+        h_vi(idx) = animatedline('Color', slanCL(1148,idx), 'LineWidth', 1.7, 'DisplayName', ['Wheel ' num2str(idx)]);
+    end
+    xlabel('Time (s)','FontName','Times New Roman'); 
+    ylabel('Output Velocity (m/s)','FontName','Times New Roman'); 
+    title('Output Velocity','FontName','Times New Roman');
+    legend('FontSize', 6,'FontName','Times New Roman');
+    grid on; set(gca,'FontName','Times New Roman');
+    
+    prev_phi = zeros(4, 1);
+    
  % ======================================= 仿真循环 =========================================
     for k = 1:params.num_steps
-
         t = (k - 1) * params.dt;
         t_history(k) = t;
         q_history(k, :) = q;
         psi_history(k) = psi0;
         
      %=================当与终点差较远距离时继续行驶================
-
-
         % if((path(1, end)-q(1))^2 + (path(2, end)-q(2))^2 > 0.01)    
         [new_state_dot, velocity] = control_RSS(path, k, last_vel, state);
         % end
         last_vel = velocity;
-
      %=======================得到反馈量======================
         
         vx = new_state_dot(1);
@@ -56,9 +82,7 @@ function main()
         omega_b= new_state_dot(3);
         phi = [0; 0; 0; 0];
         vi = [0; 0; 0; 0];
-
      %=====================计算轮子角速度========================、
-
         for i = 1:4
             Hj = [1, 0, -params.wheel_pos(i,2);0, 1, params.wheel_pos(i,1)];
             zn = Hj * velocity;
@@ -67,19 +91,31 @@ function main()
             vi(i) = sqrt(vxi^2 + vyi^2);
             phi(i) = atan2(vyi, vxi);
         end
-
      %==========================记录=============================
         vi_history(k,:) = vi;
         phi_history(k,:) = phi;
-
      %=========================更新状态========================
         psi0 = psi0 + omega_b * params.dt;
         q = q + [vx , vy]* params.dt;
         state_dot = new_state_dot;
         state = [q , psi0];  
         
+        addpoints(h_q, q(1), q(2));
+        for idx = 1:4
+            addpoints(h_vi(idx), t, vi(idx));
+        end
+        if k > 1
+            for idx = 1:4
+                d_phi = phi(idx) - prev_phi(idx);
+                d_phi = mod(d_phi + pi, 2*pi) - pi;
+                curr_phidot = d_phi / params.dt;
+                addpoints(h_phidot(idx), t, curr_phidot);
+            end
+        end
+        drawnow limitrate;
+        prev_phi = phi;
+        
     end%仿真结束
-
     phidot_history = diff(phi_history);
     % 角度归一化：将phidot_history每个元素限制在(-π, π]区间
     for m = 1:params.num_steps
@@ -88,7 +124,7 @@ function main()
             phidot_history(m) = phi_val / params.dt;
     end
     
-    plot_results(q_history, vi_history, [[0, 0, 0, 0]; phidot_history], psi_history, t_history, path);
+    % plot_results(q_history, vi_history, [[0, 0, 0, 0]; phidot_history], psi_history, t_history, path);
     sum1=0;
     for i=1:params.num_steps
         sum1 = sum1 + norm(q_history(i) - path(1:2, i))^2;
@@ -99,4 +135,3 @@ function main()
     
     save('solve_time_data.mat', 'solver_time_array'); 
 end
-
