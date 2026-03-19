@@ -63,7 +63,7 @@ function [new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
             subject to
                 % 动力学约束
                 nu(:, 1) == current_nu + u(:, 1);
-                for k = 1:K-1
+                for k = 1:K - 1
                     nu(:, k + 1) == nu(:, k) + u(:, k + 1); 
                 end
                 % 凸约束
@@ -111,8 +111,10 @@ function [new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
                             LH = LH + 2 * ((eye(2) + R)* H{n} * nu_hat(:, k - 1) + R * H{n} * u_hat(:, k))' * R * H{n} * (u(:, k) - u_hat(:, k) );
                         end
                         if k > 1
-                            sum_square(H{n} * nu(:, k - 1)) + sum_square( H{n} * (nu(:, k - 1) + u(:, k)) )...
+
+                            sum_square(H{n} * nu(:, k - 1)) + sum_square( R' * H{n} * (nu(:, k - 1) + u(:, k)) )...
                                 - sum_square( (eye(2) + R) * H{n} * nu_hat(:, k-1) + R * H{n} * u_hat(:, k) ) - LH <= 0;
+
                         end
                         if k == 1
                             current_nu' * H{n}' * R * H{n} * (current_nu + u(:, 1)) >= epsilon;

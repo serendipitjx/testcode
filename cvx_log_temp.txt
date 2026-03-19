@@ -1,0 +1,12 @@
+{操作在以下过程中被用户终止 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('cvx/norm', 'C:\Users\Lenovo\Documents\MATLAB\cvx\builtins\@cvx\norm.m', 54)" style="font-weight:bold">cvx/norm</a> (<a href="matlab: opentoline('C:\Users\Lenovo\Documents\MATLAB\cvx\builtins\@cvx\norm.m',54,0)">第 54 行</a>)
+
+
+位置 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('control_RSS', 'C:\Users\Lenovo\Documents\MATLAB\test\control_RSS.m', 72)" style="font-weight:bold">control_RSS</a> (<a href="matlab: opentoline('C:\Users\Lenovo\Documents\MATLAB\test\control_RSS.m',72,0)">第 72 行</a>)
+                        norm(H{n} * nu(:, k), 2) <= params.vimax;
+                        ^^^^^^^^^^^^^^^^^^^^^^^^
+位置 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('main', 'C:\Users\Lenovo\Documents\MATLAB\test\main.m', 48)" style="font-weight:bold">main</a> (<a href="matlab: opentoline('C:\Users\Lenovo\Documents\MATLAB\test\main.m',48,0)">第 48 行</a>)
+        [new_state_dot, velocity] = control_RSS(path, k, last_vel, state);
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+} 
+main
+开始仿真...
