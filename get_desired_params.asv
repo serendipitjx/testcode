@@ -26,7 +26,10 @@
     thetad = (2*pi / Lp^2) * s^2;
     dthetad_ds = (4*pi / Lp^2) * s;
     d2thetad_ds2 = 4*pi / Lp^2;
-
+    %计算速度
+    v_ref = zeros(2, );
+    v_ref(1, :) = diff(x)/dt;
+    v_ref(2, :) = diff(y)/dt;
 
 
 end

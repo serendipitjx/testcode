@@ -6,7 +6,7 @@ function params = config()
     params.b = params.Ly/2;   % 车轮y向偏移(mm)
     params.wheel_pos = [params.a, params.b; -params.a, params.b; -params.a, -params.b; params.a, -params.b]; % 4车轮位置
     params.vimax = 5;     % 最大驱动速度(mm/s)
-    params.phidotmax = 5 * pi;   % 最大转向速度(rad/s)
+    params.phidotmax = 0.5 * pi;   % 最大转向速度(rad/s)
 
     % ====================== 控制器参数 ======================
     params.k1 = 0.15;
@@ -26,5 +26,5 @@ function params = config()
                        1.000, 0]; % 贝塞尔曲线控制点
     params.num_path_pts = params.num_steps; % 路径离散点数
     %===================================================================
-    
+    params.nu_ref=[0.1:0.1:2;0.1:0.1:2;0.1:0.1:2];
 end
