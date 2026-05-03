@@ -62,21 +62,24 @@ function main()
     grid on; set(gca,'FontName','Times New Roman');
     
     prev_phi = zeros(4, 1);
-    
+    J=0;
+     u=zeros(3, 1);
  % ======================================= 仿真循环 =========================================
     for k = 1:params.num_steps
         t = (k - 1) * params.dt;
         t_history(k) = t;
         q_history(k, :) = q;
         psi_history(k) = psi0;
-        
+       
+        e=state'-path(:,k);
+        J = J + e'*[30,0,0;0,30,0;0,0,1]*e+u(:,1)'*[0.3,0,0;0,0.3,0;0,0,0.3]*u(:,1);
      %=================当与终点差较远距离时继续行驶================
         % if((path(1, end)-q(1))^2 + (path(2, end)-q(2))^2 > 0.01)    
-        [new_state_dot, velocity] = control_RSS(path, k, last_vel, state);
+        [u,new_state_dot, velocity] = control_RSS(path, k, last_vel, state);
         % end
         last_vel = velocity;
      %=======================得到反馈量======================
-        
+       
         vx = new_state_dot(1);
         vy = new_state_dot(2);
         omega_b= new_state_dot(3);
@@ -98,7 +101,7 @@ function main()
         psi0 = psi0 + omega_b * params.dt;
         q = q + [vx , vy]* params.dt;
         state_dot = new_state_dot;
-        state = [q , psi0];  
+        state = [q , psi0]; 
         
         addpoints(h_q, q(1), q(2));
         for idx = 1:4
@@ -132,6 +135,6 @@ function main()
     fprintf('RMSE是: %f\n', sqrt(sum1/params.num_steps));
     global solver_time_array
     fprintf('总用时是：%f\n',sum(solver_time_array));
-    
+    fprintf('代价是：%f\n',J);
     save('solve_time_data.mat', 'solver_time_array'); 
 end

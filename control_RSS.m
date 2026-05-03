@@ -1,4 +1,4 @@
-function [new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
+function [u,new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
     
     params = config();
    
