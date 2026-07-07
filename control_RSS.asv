@@ -1,4 +1,4 @@
-function [new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
+function [u,new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
     
     params = config();
    
@@ -24,12 +24,11 @@ function [new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
     % ================= 一层循环开始 =======================================
     for m = 1 : max_iter
         % ========== 1. 日志捕获（确保完整捕获Runtime行） ==========
-        log_file = 'cvx_log_temp.txt';
-        % 先删除旧日志（避免残留）
+        log_file = 'cvx_log_temp.txt'
         if exist(log_file, 'file'), delete(log_file); end
         diary(log_file); diary on;
 
-        % ========== 2. CVX求解（彻底清理高版本指令+修正psi声明） ==========
+        % ========== CVX求解 ==========
         cvx_begin % 无quiet、无cvx_options，纯低版本语法
             cvx_solver ECOS;
           
@@ -97,7 +96,7 @@ function [new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
                         if k == 1
                             sum_square(H{n} * current_nu) + sum_square( H{n} * (current_nu + u(:, 1)) )...
                                 - sum_square( (eye(2) + R) * H{n} * current_nu + R * H{n} * u_hat(:, 1) )...
-                                - ((eye(2) + R) * H{n} * current_nu + R * H{n} * u(:,1))' * (R * H{n} * (u(:, 1) - u_hat(:, 1))) <= 0;
+                                - 2 * ((eye(2) + R) * H{n} * current_nu + R * H{n} * u_hat(:, 1))' * (R * H{n} * (u(:, 1) - u_hat(:, 1))) <= 0;
                         end
                     end
                 end
@@ -119,7 +118,7 @@ function [new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
                         if k == 1
                              sum_square(H{n} * current_nu) + sum_square( H{n} * (current_nu + u(:, 1)) )...
                                 - sum_square( (eye(2) + R) * H{n} * current_nu + R * H{n} * u_hat(:, 1) )...
-                                - ((eye(2) + R) * H{n} * current_nu + R * H{n} * u(:, 1))' * (R * H{n} * (u(:, 1) - u_hat(:, 1))) <= 0;
+                                - 2 * ((eye(2) + R) * H{n} * current_nu + R * H{n} * u_hat(:, 1))' * (R * H{n} * (u(:, 1) - u_hat(:, 1))) <= 0;
                         end
                     end
                 end

@@ -9,14 +9,17 @@ function main()
     [path] = bezier_path(params.ctrl_pts, params.num_path_pts);
     % ================= 初始化=================
     
-    q = [0.050, 0.1];         % 初始位置(m)(1*2)
-    psi0 = 0.2;                  % 初始朝向(rad)
+    q = [0.050, 0.1];          % 初始位置(m)(1*2)
+    psi0 = 0.2;                % 初始朝向(rad)
     v_c = 0.141;               % 初始速度大小(m/s)
     vx = 0.01;
     vy = 0.01;
     omega_b = 0.01;
     last_vel = [vx ; vy ; omega_b];    %3*1
     state = [q , psi0];               %1*3
+    prev_phi = zeros(4, 1);
+    J=0;
+    u=zeros(3, 1);
     % ================= 定义历史记录 =================
     q_history = zeros(params.num_steps, 2);
     vi_history = zeros(params.num_steps, 4);
@@ -24,7 +27,7 @@ function main()
     psi_history = zeros(params.num_steps, 1);
     t_history = zeros(params.num_steps, 1);
     phi_history = zeros(params.num_steps, 4);
-    
+    %================== 实时绘图 =====================
     figure('Position', [100, 100, 1500, 300]);
     
     subplot(1, 3, 1);
@@ -60,10 +63,7 @@ function main()
     title('Output Velocity','FontName','Times New Roman');
     legend('FontSize', 6,'FontName','Times New Roman');
     grid on; set(gca,'FontName','Times New Roman');
-    
-    prev_phi = zeros(4, 1);
-    J=0;
-     u=zeros(3, 1);
+   
  % ======================================= 仿真循环 =========================================
     for k = 1:params.num_steps
         t = (k - 1) * params.dt;
@@ -73,10 +73,9 @@ function main()
        
         e=state'-path(:,k);
         J = J + e'*[30,0,0;0,30,0;0,0,1]*e+u(:,1)'*[0.3,0,0;0,0.3,0;0,0,0.3]*u(:,1);
-     %=================当与终点差较远距离时继续行驶================
-        % if((path(1, end)-q(1))^2 + (path(2, end)-q(2))^2 > 0.01)    
+     
         [u,new_state_dot, velocity] = control_RSS(path, k, last_vel, state);
-        % end
+      
         last_vel = velocity;
      %=======================得到反馈量======================
        
@@ -102,7 +101,6 @@ function main()
         q = q + [vx , vy]* params.dt;
         state_dot = new_state_dot;
         state = [q , psi0]; 
-        
         addpoints(h_q, q(1), q(2));
         for idx = 1:4
             addpoints(h_vi(idx), t, vi(idx));

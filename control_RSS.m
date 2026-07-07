@@ -15,7 +15,8 @@ function [u,new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
     end
 
     % ================= 迭代 Setup =================
-    max_iter = 3; u_hat = zeros(3,K);
+    max_iter = 3; %子问题迭代次数
+    u_hat = zeros(3,K);
     global solver_time_array;
     if ~exist('solver_time_array', 'var') || isempty(solver_time_array)
         solver_time_array = [];
@@ -23,22 +24,21 @@ function [u,new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
 
     % ================= 一层循环开始 =======================================
     for m = 1 : max_iter
-        % ========== 1. 日志捕获（确保完整捕获Runtime行） ==========
+        % ========== 日志捕获 ==========
         log_file = 'cvx_log_temp.txt';
-        % 先删除旧日志（避免残留）
         if exist(log_file, 'file'), delete(log_file); end
         diary(log_file); diary on;
 
-        % ========== 2. CVX求解（彻底清理高版本指令+修正psi声明） ==========
-        cvx_begin % 无quiet、无cvx_options，纯低版本语法
+        % ========== CVX求解 ==========
+        cvx_begin
             cvx_solver ECOS;
           
             variable u(3, K)
             variable nu(3, K)
-            % 低版本CVX必须单独声明expression，彻底解决psi未识别
+
             expression NU(2, K);
-            expression psi(K);  % 单独声明，语法正确
-            expression J;       % 单独声明J
+            expression psi(K); 
+            expression J;      
             
             % 定义状态序列
             NU(:, 1) = current_nu(1:2) * params.dt;
@@ -59,7 +59,7 @@ function [u,new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
             end
             minimize(J + 0.3 * sum_square(u(:)) + rho * sum_square(u(:) - u_hat(:)));
 
-            % 约束（完全保留你的逻辑）
+            % 约束
             subject to
                 % 动力学约束
                 nu(:, 1) == current_nu + u(:, 1);
@@ -82,7 +82,7 @@ function [u,new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
                 end
                 for k = 1:K
                     for n = 1:4
-                        expression LH;  % 单独声明LH
+                        expression LH; 
                         LH = 0;
                         if k > 1
                             for l = 1:k-1
@@ -104,7 +104,7 @@ function [u,new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
                 R = [sin(delta_theta), cos(delta_theta); -cos(delta_theta), sin(delta_theta)];
                 for k = 1:K
                     for n = 1:4
-                        expression LH;  % 单独声明LH
+                        expression LH; 
                         LH = 0;
                         if k > 1
                             for l = 1:k-1
@@ -125,9 +125,9 @@ function [u,new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
                 end
         cvx_end
 
-        % ========== 3. 停止日志+完整读取 ==========
+        % ========== 停止日志+完整读取 ==========
         diary off;
-        % 强制刷新日志文件（避免读取不完整）
+        % 强制刷新日志文件
         pause(0.01);
         fid = fopen(log_file, 'r');
         time_str = '未匹配到';
@@ -136,13 +136,12 @@ function [u,new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
         if fid == -1
             fprintf('警告：日志文件打开失败\n');
         else
-            % 读取完整日志（按行读，确保抓到Runtime行）
+            % 读取完整日志
             cvx_log = fread(fid, '*char')';
             fclose(fid);
-            delete(log_file); % 立即删除，避免残留
+            delete(log_file); 
 
-            % ========== 4. 核心修正：匹配你的ECOS日志格式（Runtime: x.xxxx seconds） ==========
-            % 你的日志格式是：Runtime: 0.008767 seconds. 修正正则表达式！
+            % ========== 匹配ECOS日志格式（Runtime: x.xxxx seconds） ==========
             pattern = 'Runtime:\s*(\d+\.?\d*e?[-+]?\d*)\s*seconds';
             time_match = regexp(cvx_log, pattern, 'tokens');
 
@@ -161,17 +160,17 @@ function [u,new_state_dot, velocity] = control_RSS(path, step, state_dot, state)
             fprintf('===== 调试：日志中Runtime行 =====\n%s\n', runtime_line{1});
         end
 
-        % ========== 5. 存入数组（保留你的索引逻辑） ==========
+        % ========== 存入数组 ==========
         solver_time_array(3*step + m - 3) = inner_solve_time;
 
-        % 打印结果（清晰显示提取的时间）
+        % 打印结果
         fprintf('第%d步第%d次迭代 - ECOS内部求解时间：%.6f秒（原始值：%s）\n', ...
             step, m, inner_solve_time, time_str);
         fprintf('最优代价: %f | 求解状态: %s\n', cvx_optval, cvx_status);
 
         % 迭代更新
         u_hat = u;
-    end % max_iter
+    end 
 
     % 输出状态导数
     new_state_dot =  [cos(state(3)), -sin(state(3)), 0;
